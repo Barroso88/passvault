@@ -1,0 +1,42 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:15-alpine
+    container_name: passvault-db
+    environment:
+      POSTGRES_USER: passvault_user
+      POSTGRES_PASSWORD: passvault_secret
+      POSTGRES_DB: passvault
+    volumes:
+      - passvault_data:/var/lib/postgresql/data
+      - ./init.sql:/docker-entrypoint-initdb.d/init.sql
+    restart: unless-stopped
+    networks:
+      - passvault_net
+
+  backend:
+    image: node:18-alpine
+    container_name: passvault-api
+    working_dir: /app
+    volumes:
+      - ./server.js:/app/server.js
+      - ./package.json:/app/package.json
+    command: sh -c "npm install && node server.js"
+    ports:
+      - "3001:3001"
+    depends_on:
+      - postgres
+    environment:
+      DATABASE_URL: postgres://passvault_user:passvault_secret@postgres:5432/passvault
+      PORT: 3001
+    restart: unless-stopped
+    networks:
+      - passvault_net
+
+volumes:
+  passvault_data:
+
+networks:
+  passvault_net:
+    driver: bridge
