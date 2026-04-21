@@ -2,14 +2,16 @@ import React, { useState, useEffect, useContext, createContext, useMemo, useRef,
 import { 
   Lock, Unlock, Shield, Key, CreditCard, LayoutDashboard, Settings, Plus, 
   Search, Eye, EyeOff, Copy, Trash, Edit, Check, Star, AlertTriangle, 
-  LogOut, Clock, Globe, Menu, X, ChevronRight, Hash, RefreshCw, Palette, Sparkles, Loader2
+  LogOut, Clock, Globe, Menu, X, ChevronRight, Hash, RefreshCw, Palette, Sparkles, Loader2,
+  Folder, FolderPlus, ArrowLeft
 } from 'lucide-react';
 
 // ==========================================
 // CONFIGURAÇÃO DA API (Backend Unraid)
 // ==========================================
 // Alterar 'localhost' para o IP do seu Unraid quando compilar (ex: 192.168.1.100)
-const API_URL = `http://192.168.1.152:3071/api`;
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
+const PREVIEW_MODE = import.meta.env.VITE_PREVIEW_MODE === 'true';
 
 // ==========================================
 // 1. CONSTANTS, THEMES & TRANSLATIONS
@@ -52,6 +54,13 @@ const TRANSLATIONS = {
     quickActions: 'Ações Rápidas',
     addPassword: 'Nova Password',
     addCard: 'Novo Cartão',
+    vaultOverview: 'Visão do Cofre',
+    passwordsSubtitle: 'Uma biblioteca de credenciais com leitura rápida, filtros claros e acesso imediato.',
+    protectedEntries: 'Entradas protegidas',
+    categoriesLabel: 'Categorias',
+    folders: 'Pastas',
+    foldersSubtitle: 'Escolhe uma pasta para veres as credenciais guardadas lá dentro.',
+    backToFolders: 'Voltar às pastas',
     serviceName: 'Nome do Serviço / App',
     url: 'Website / URL',
     username: 'Nome de Utilizador / Email',
@@ -86,6 +95,7 @@ const TRANSLATIONS = {
     noData: 'Nenhum registo encontrado.',
     confirmDelete: 'Tem a certeza que deseja apagar este registo?',
     newCategory: 'Nova Categoria',
+    editCategory: 'Editar Categoria',
     categoryName: 'Nome da Categoria',
     all: 'Todos',
     items: 'itens',
@@ -117,6 +127,13 @@ const TRANSLATIONS = {
     quickActions: 'Quick Actions',
     addPassword: 'New Password',
     addCard: 'New Card',
+    vaultOverview: 'Vault Overview',
+    passwordsSubtitle: 'A credential library with quick scanning, clean filters, and immediate access.',
+    protectedEntries: 'Protected entries',
+    categoriesLabel: 'Categories',
+    folders: 'Folders',
+    foldersSubtitle: 'Choose a folder to view the credentials stored inside it.',
+    backToFolders: 'Back to folders',
     serviceName: 'Service / App Name',
     url: 'Website / URL',
     username: 'Username / Email',
@@ -151,6 +168,7 @@ const TRANSLATIONS = {
     noData: 'No records found.',
     confirmDelete: 'Are you sure you want to delete this record?',
     newCategory: 'New Category',
+    editCategory: 'Edit Category',
     categoryName: 'Category Name',
     all: 'All',
     items: 'items',
@@ -182,6 +200,13 @@ const TRANSLATIONS = {
     quickActions: 'Acciones Rápidas',
     addPassword: 'Nueva Contraseña',
     addCard: 'Nueva Tarjeta',
+    vaultOverview: 'Vista de la Bóveda',
+    passwordsSubtitle: 'Una biblioteca de credenciales con lectura rápida, filtros claros y acceso inmediato.',
+    protectedEntries: 'Entradas protegidas',
+    categoriesLabel: 'Categorías',
+    folders: 'Carpetas',
+    foldersSubtitle: 'Elige una carpeta para ver las credenciales guardadas dentro.',
+    backToFolders: 'Volver a carpetas',
     serviceName: 'Nombre del Servicio / App',
     url: 'Sitio Web / URL',
     username: 'Usuario / Email',
@@ -216,6 +241,7 @@ const TRANSLATIONS = {
     noData: 'No se encontraron registros.',
     confirmDelete: '¿Está seguro de que desea borrar este registro?',
     newCategory: 'Nueva Categoría',
+    editCategory: 'Editar Categoría',
     categoryName: 'Nombre de la Categoría',
     all: 'Todos',
     items: 'elementos',
@@ -226,7 +252,136 @@ const TRANSLATIONS = {
   }
 };
 
-const DEFAULT_CATEGORIES = ['Streaming', 'Social', 'Work', 'Finance', 'Shopping', 'Other'];
+const DEFAULT_CATEGORIES = [
+  { name: 'Streaming', order: 0 },
+  { name: 'Social', order: 1 },
+  { name: 'Work', order: 2 },
+  { name: 'Finance', order: 3 },
+  { name: 'Shopping', order: 4 },
+  { name: 'Other', order: 5 },
+];
+
+const CATEGORY_NEUTRAL = {
+  base: 'hsl(215 16% 38%)',
+  dark: 'hsl(215 18% 22%)',
+  glow: 'hsla(215 16% 65% / 0.18)',
+};
+
+const hashNumber = (value) => {
+  let x = (value + 0x9e3779b9) >>> 0;
+  x ^= x << 13;
+  x ^= x >>> 17;
+  x ^= x << 5;
+  return x >>> 0;
+};
+
+const createFolderColor = (order) => {
+  const hash = hashNumber(order);
+  const hue = hash % 360;
+  const saturation = 62 + ((hash >> 8) % 14);
+  const lightness = 46 + ((hash >> 16) % 8);
+  return {
+    base: `hsl(${hue} ${saturation}% ${lightness}%)`,
+    dark: `hsl(${hue} ${saturation}% ${Math.max(18, lightness - 18)}%)`,
+    glow: `hsla(${hue} ${saturation}% 65% / 0.22)`,
+  };
+};
+
+const normalizeCategories = (input = []) => {
+  const items = Array.isArray(input) ? input : [];
+  const normalized = items.map((cat, index) => {
+    if (typeof cat === 'string') {
+      return { name: cat, order: index };
+    }
+    if (cat && typeof cat === 'object') {
+      return {
+        name: cat.name || cat.title || `Category ${index + 1}`,
+        order: Number.isFinite(Number(cat.order)) ? Number(cat.order) : index,
+      };
+    }
+    return null;
+  }).filter(Boolean);
+
+  if (!normalized.some(cat => cat.name === 'Other')) {
+    normalized.push({ name: 'Other', order: normalized.length + 1000 });
+  }
+
+  return normalized
+    .sort((a, b) => a.order - b.order)
+    .map((cat, index) => ({
+      name: cat.name,
+      order: Number.isFinite(cat.order) ? cat.order : index,
+    }));
+};
+
+const getCategoryStyle = (category) => {
+  const tone = category.name === 'Other' ? CATEGORY_NEUTRAL : createFolderColor(category.order);
+  return {
+    backgroundImage: `linear-gradient(145deg, ${tone.base}, ${tone.dark})`,
+    boxShadow: `0 16px 30px -20px rgba(0, 0, 0, 0.7), inset 0 1px 0 rgba(255,255,255,0.08), 0 0 0 1px rgba(255,255,255,0.03)`,
+  };
+};
+
+const getCategoryName = (category) => (typeof category === 'string' ? category : category?.name || '');
+const isSystemCategory = (name) => false;
+const PREVIEW_PASSWORDS = [
+  {
+    id: 'demo-1',
+    title: 'Netflix',
+    url: 'https://netflix.com',
+    username: 'andre@example.com',
+    password: 'DemoPass!2026',
+    notes: 'Subscription account',
+    category: 'Streaming',
+    favorite: true,
+    date: Date.now() - 86400000,
+  },
+  {
+    id: 'demo-2',
+    title: 'GitHub',
+    url: 'https://github.com',
+    username: 'andrebarroso',
+    password: 'Vault#Preview88',
+    notes: 'Main dev account',
+    category: 'Work',
+    favorite: false,
+    date: Date.now() - 172800000,
+  },
+  {
+    id: 'demo-3',
+    title: 'Revolut',
+    url: 'https://revolut.com',
+    username: 'andre@finance.pt',
+    password: 'Secure-Card-11!',
+    notes: 'Banking',
+    category: 'Finance',
+    favorite: true,
+    date: Date.now() - 259200000,
+  },
+];
+const PREVIEW_CARDS = [
+  {
+    id: 'card-demo-1',
+    name: 'Main Visa',
+    number: '4532123412341234',
+    holder: 'ANDRE BARROSO',
+    expiry: '09/29',
+    cvv: '321',
+    pin: '4821',
+    color: 'from-blue-600 to-blue-900',
+    date: Date.now() - 86400000,
+  },
+];
+
+const readPreviewState = (key, fallback) => {
+  try {
+    const raw = localStorage.getItem(key);
+    if (!raw) return fallback;
+    return JSON.parse(raw);
+  } catch {
+    return fallback;
+  }
+};
 
 // ==========================================
 // 2. CONTEXT & STATE MANAGEMENT
@@ -240,25 +395,46 @@ const AppProvider = ({ children }) => {
   const [timeoutMinutes, setTimeoutMinutes] = useState(Number(localStorage.getItem('pv_timeout')) || 5);
   
   // Estado de Autenticação
-  const [isLocked, setIsLocked] = useState(true);
-  const [masterHash, setMasterHash] = useState(sessionStorage.getItem('pv_master_hash') || null);
+  const [isLocked, setIsLocked] = useState(PREVIEW_MODE ? false : true);
+  const [masterHash, setMasterHash] = useState(PREVIEW_MODE ? 'preview-master' : (sessionStorage.getItem('pv_master_hash') || null));
   
   // Estado do Cofre (Agora inicializado vazio, preenchido via Postgres)
-  const [categories, setCategories] = useState(DEFAULT_CATEGORIES);
-  const [passwords, setPasswords] = useState([]);
-  const [cards, setCards] = useState([]);
+  const [categories, setCategories] = useState(
+    PREVIEW_MODE ? normalizeCategories(readPreviewState('pv_preview_categories', DEFAULT_CATEGORIES)) : normalizeCategories(DEFAULT_CATEGORIES)
+  );
+  const [passwords, setPasswords] = useState(
+    PREVIEW_MODE ? readPreviewState('pv_preview_passwords', PREVIEW_PASSWORDS) : []
+  );
+  const [cards, setCards] = useState(
+    PREVIEW_MODE ? readPreviewState('pv_preview_cards', PREVIEW_CARDS) : []
+  );
   
   const [activeTab, setActiveTab] = useState('dashboard');
+  const [quickCreate, setQuickCreate] = useState(null);
+  const [quickEdit, setQuickEdit] = useState(null);
   const [toast, setToast] = useState(null);
 
   // Guardar apenas configs no localstorage
   useEffect(() => { localStorage.setItem('pv_theme', theme); }, [theme]);
   useEffect(() => { localStorage.setItem('pv_lang', lang); }, [lang]);
   useEffect(() => { localStorage.setItem('pv_timeout', timeoutMinutes); }, [timeoutMinutes]);
+  useEffect(() => {
+    if (!PREVIEW_MODE) return;
+    localStorage.setItem('pv_preview_categories', JSON.stringify(categories));
+  }, [categories]);
+  useEffect(() => {
+    if (!PREVIEW_MODE) return;
+    localStorage.setItem('pv_preview_passwords', JSON.stringify(passwords));
+  }, [passwords]);
+  useEffect(() => {
+    if (!PREVIEW_MODE) return;
+    localStorage.setItem('pv_preview_cards', JSON.stringify(cards));
+  }, [cards]);
 
   // Aplicação da Base de Dados PostgreSQL (Auto-Sync)
   const isInitialMount = useRef(true);
   useEffect(() => {
+    if (PREVIEW_MODE) return;
     if (isInitialMount.current) { 
       isInitialMount.current = false; 
       return; 
@@ -323,7 +499,10 @@ const AppProvider = ({ children }) => {
     isLocked, setIsLocked, masterHash, setMasterHash,
     categories, setCategories,
     passwords, setPasswords, cards, setCards,
-    activeTab, setActiveTab, t, showToast, copyToClipboard
+    activeTab, setActiveTab,
+    quickCreate, setQuickCreate,
+    quickEdit, setQuickEdit,
+    t, showToast, copyToClipboard
   };
 
   return (
@@ -344,30 +523,98 @@ const AppProvider = ({ children }) => {
 // ==========================================
 
 const callGemini = async (prompt, schema) => {
-  const apiKey = "AIzaSyDvuU7yOxgU8MzTw_kXcnQ31VmZsit63DY"; // Canvas environment API key, mas pode colocar a sua aqui no seu código local
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent?key=${apiKey}`;
-  
-  const payload = {
-    contents: [{ parts: [{ text: prompt }] }],
-    generationConfig: {
-      responseMimeType: "application/json",
-      responseSchema: schema
-    }
-  };
+  const res = await fetch(`${API_URL}/ai/generate`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ prompt, schema })
+  });
 
-  let delay = 1000;
-  for (let i = 0; i < 5; i++) {
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    throw new Error(data?.error || 'Falha ao contactar a IA.');
+  }
+
+  if (!data?.result) {
+    throw new Error('IA devolveu uma resposta vazia.');
+  }
+
+  return data.result;
+};
+
+const normalizeText = (value = '') => value
+  .normalize('NFD')
+  .replace(/[\u0300-\u036f]/g, '')
+  .toLowerCase()
+  .trim();
+
+const getHostname = (url = '') => {
+  if (!url) return '';
+  try {
+    return new URL(url.startsWith('http') ? url : `https://${url}`).hostname;
+  } catch {
+    return '';
+  }
+};
+
+const buildFallbackPassphrase = (themePrompt = '') => {
+  const rawWords = normalizeText(themePrompt)
+    .split(/[^a-z0-9]+/i)
+    .map(word => word.trim())
+    .filter(word => word.length > 3 && !['para', 'com', 'uma', 'tema', 'tema', 'the', 'and', 'for', 'with'].includes(word));
+
+  const seeds = rawWords.slice(0, 4);
+  const defaults = ['Chave', 'Segura', 'Nuvem', 'Lisboa'];
+  const chosen = (seeds.length ? seeds : defaults).map(word => word.charAt(0).toUpperCase() + word.slice(1));
+  const number = Math.floor(10 + Math.random() * 90);
+  const symbols = ['!', '@', '#', '$', '%', '&'];
+  const symbol = symbols[Math.floor(Math.random() * symbols.length)];
+  return `${chosen.join('-')}-${number}${symbol}`;
+};
+
+const inferUrlFallback = (title = '', url = '') => {
+  const trimmedUrl = url?.trim();
+  if (trimmedUrl) {
     try {
-      const res = await fetch(url, { method: 'POST', body: JSON.stringify(payload), headers: { 'Content-Type': 'application/json' } });
-      if (!res.ok) throw new Error('API Error');
-      const data = await res.json();
-      return JSON.parse(data.candidates[0].content.parts[0].text);
-    } catch (err) {
-      if (i === 4) throw err;
-      await new Promise(r => setTimeout(r, delay));
-      delay *= 2;
+      return new URL(trimmedUrl.startsWith('http') ? trimmedUrl : `https://${trimmedUrl}`).toString();
+    } catch {
+      return trimmedUrl;
     }
   }
+
+  const normalizedTitle = normalizeText(title);
+  const urlMap = [
+    { keywords: ['netflix'], url: 'https://www.netflix.com' },
+    { keywords: ['spotify'], url: 'https://www.spotify.com' },
+    { keywords: ['youtube'], url: 'https://www.youtube.com' },
+    { keywords: ['google', 'gmail', 'drive', 'meet', 'calendar'], url: 'https://www.google.com' },
+    { keywords: ['github'], url: 'https://github.com' },
+    { keywords: ['gitlab'], url: 'https://gitlab.com' },
+    { keywords: ['discord'], url: 'https://discord.com' },
+    { keywords: ['facebook', 'meta'], url: 'https://www.facebook.com' },
+    { keywords: ['instagram'], url: 'https://www.instagram.com' },
+    { keywords: ['linkedin'], url: 'https://www.linkedin.com' },
+    { keywords: ['reddit'], url: 'https://www.reddit.com' },
+    { keywords: ['twitch'], url: 'https://www.twitch.tv' },
+    { keywords: ['amazon'], url: 'https://www.amazon.com' },
+    { keywords: ['paypal'], url: 'https://www.paypal.com' },
+    { keywords: ['revolut'], url: 'https://www.revolut.com' },
+    { keywords: ['wise'], url: 'https://wise.com' },
+    { keywords: ['outlook', 'hotmail'], url: 'https://outlook.live.com' },
+    { keywords: ['proton'], url: 'https://proton.me' },
+    { keywords: ['dropbox'], url: 'https://www.dropbox.com' },
+    { keywords: ['steam'], url: 'https://store.steampowered.com' },
+    { keywords: ['epic'], url: 'https://store.epicgames.com' },
+    { keywords: ['apple'], url: 'https://www.apple.com' },
+    { keywords: ['microsoft', 'office', 'teams'], url: 'https://www.microsoft.com' },
+  ];
+
+  for (const entry of urlMap) {
+    if (entry.keywords.some(keyword => normalizedTitle.includes(normalizeText(keyword)))) {
+      return entry.url;
+    }
+  }
+
+  return '';
 };
 
 const getFavicon = (url) => {
@@ -551,7 +798,7 @@ const AuthScreen = () => {
       
       if (res.ok) {
         const data = await res.json();
-        setCategories(data.categories || DEFAULT_CATEGORIES);
+        setCategories(normalizeCategories(data.categories || DEFAULT_CATEGORIES));
         setPasswords(data.passwords || []);
         setCards(data.cards || []);
         
@@ -610,7 +857,7 @@ const AuthScreen = () => {
 };
 
 const Dashboard = () => {
-  const { passwords, cards, setActiveTab, t } = useContext(AppContext);
+  const { passwords, cards, setQuickEdit, setQuickCreate, t } = useContext(AppContext);
   
   const recentPasswords = [...passwords].sort((a,b) => b.date - a.date).slice(0,3);
   const favorites = passwords.filter(p => p.favorite);
@@ -645,8 +892,8 @@ const Dashboard = () => {
       <div>
         <h2 className="text-sm font-semibold text-[var(--text-muted)] uppercase tracking-wider mb-3">{t('quickActions')}</h2>
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-          <Button variant="secondary" onClick={() => setActiveTab('passwords')} icon={Plus} className="text-sm">{t('addPassword')}</Button>
-          <Button variant="secondary" onClick={() => setActiveTab('cards')} icon={Plus} className="text-sm">{t('addCard')}</Button>
+          <Button variant="secondary" onClick={() => setQuickCreate('password')} icon={Plus} className="text-sm">{t('addPassword')}</Button>
+          <Button variant="secondary" onClick={() => setQuickCreate('card')} icon={Plus} className="text-sm">{t('addCard')}</Button>
           <Button variant="secondary" onClick={() => setActiveTab('generator')} icon={RefreshCw} className="text-sm">{t('generator')}</Button>
           <Button variant="secondary" onClick={() => setActiveTab('settings')} icon={Settings} className="text-sm">{t('settings')}</Button>
         </div>
@@ -658,7 +905,7 @@ const Dashboard = () => {
           <h2 className="text-sm font-semibold text-[var(--text-muted)] uppercase tracking-wider mb-3 flex items-center"><Star size={16} className="mr-2 text-yellow-500"/> {t('favorites')}</h2>
           <div className="grid sm:grid-cols-2 gap-3">
             {favorites.map(fav => (
-              <div key={fav.id} className="bg-[var(--surface)] p-3 rounded-xl border border-[var(--border)] flex items-center space-x-3 cursor-pointer hover:border-[var(--primary)] transition-colors" onClick={() => setActiveTab('passwords')}>
+              <div key={fav.id} className="bg-[var(--surface)] p-3 rounded-xl border border-[var(--border)] flex items-center space-x-3 cursor-pointer hover:border-[var(--primary)] transition-colors" onClick={() => setQuickEdit({ type: 'password', item: fav })}>
                 <img src={getFavicon(fav.url)} alt="" className="w-8 h-8 rounded-full bg-[var(--bg)] p-1 object-contain" onError={(e) => { e.target.style.display='none'; e.target.nextSibling.style.display='flex'; }} />
                 <div className="w-8 h-8 rounded-full bg-[var(--primary)]/20 text-[var(--primary)] hidden items-center justify-center font-bold text-sm">{fav.title.charAt(0)}</div>
                 <div>
@@ -676,7 +923,7 @@ const Dashboard = () => {
         <h2 className="text-sm font-semibold text-[var(--text-muted)] uppercase tracking-wider mb-3 flex items-center"><Clock size={16} className="mr-2"/> {t('recent')}</h2>
         <div className="bg-[var(--surface)] rounded-2xl border border-[var(--border)] overflow-hidden">
           {recentPasswords.map((item, i) => (
-            <div key={item.id} className={`p-4 flex items-center justify-between ${i !== recentPasswords.length - 1 ? 'border-b border-[var(--border)]' : ''}`}>
+            <div key={item.id} className={`p-4 flex items-center justify-between cursor-pointer hover:bg-[var(--surface-hover)] transition-colors ${i !== recentPasswords.length - 1 ? 'border-b border-[var(--border)]' : ''}`} onClick={() => setQuickEdit({ type: 'password', item })}>
                <div className="flex items-center space-x-3">
                  <img src={getFavicon(item.url)} alt="" className="w-8 h-8 rounded bg-[var(--bg)] p-0.5" onError={(e) => { e.target.style.display='none'; e.target.nextSibling.style.display='flex'; }} />
                  <div className="w-8 h-8 rounded bg-[var(--primary)]/20 text-[var(--primary)] hidden items-center justify-center font-bold text-sm">{item.title.charAt(0)}</div>
@@ -685,6 +932,7 @@ const Dashboard = () => {
                    <p className="text-xs text-[var(--text-muted)]">{new Date(item.date).toLocaleDateString()}</p>
                  </div>
                </div>
+               <Edit size={16} className="text-[var(--text-muted)]" />
             </div>
           ))}
         </div>
@@ -696,24 +944,36 @@ const Dashboard = () => {
 const PasswordManager = () => {
   const { passwords, setPasswords, categories, setCategories, t, copyToClipboard, showToast } = useContext(AppContext);
   const [search, setSearch] = useState('');
-  const [filterCat, setFilterCat] = useState('All');
+  const [selectedCategory, setSelectedCategory] = useState(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingItem, setEditingItem] = useState(null);
 
   const [isCatModalOpen, setIsCatModalOpen] = useState(false);
   const [newCatName, setNewCatName] = useState('');
+  const [editingCategory, setEditingCategory] = useState(null);
 
   const [form, setForm] = useState({ title: '', url: '', username: '', password: '', notes: '', category: 'Other', favorite: false });
   const [showPwdInForm, setShowPwdInForm] = useState(false);
   const [isGeneratingInfo, setIsGeneratingInfo] = useState(false);
+  const [aiFallbackNotice, setAiFallbackNotice] = useState('');
+
+  const categoryOptions = useMemo(
+    () => categories.map(getCategoryName).filter(name => name),
+    [categories]
+  );
+
+  const selectedCategoryCount = useMemo(() => {
+    if (!selectedCategory) return 0;
+    return passwords.filter(p => p.category === selectedCategory).length;
+  }, [passwords, selectedCategory]);
 
   const filtered = useMemo(() => {
+    if (!selectedCategory) return [];
     return passwords.filter(p => {
       const matchSearch = p.title.toLowerCase().includes(search.toLowerCase()) || p.username.toLowerCase().includes(search.toLowerCase());
-      const matchCat = filterCat === 'All' || (filterCat === 'Favorites' ? p.favorite : p.category === filterCat);
-      return matchSearch && matchCat;
+      return matchSearch && p.category === selectedCategory;
     });
-  }, [passwords, search, filterCat]);
+  }, [passwords, search, selectedCategory]);
 
   const handleOpenModal = (item = null) => {
     if (item) {
@@ -721,9 +981,22 @@ const PasswordManager = () => {
       setForm(item);
     } else {
       setEditingItem(null);
-      setForm({ title: '', url: '', username: '', password: '', notes: '', category: 'Other', favorite: false });
+      setForm({ title: '', url: '', username: '', password: '', notes: '', category: selectedCategory || 'Other', favorite: false });
     }
     setIsModalOpen(true);
+  };
+
+  const openNewCategory = () => {
+    setEditingCategory(null);
+    setNewCatName('');
+    setIsCatModalOpen(true);
+  };
+
+  const openEditCategory = (category) => {
+    if (isSystemCategory(category.name)) return;
+    setEditingCategory(category);
+    setNewCatName(category.name);
+    setIsCatModalOpen(true);
   };
 
   const handleSave = (e) => {
@@ -750,25 +1023,31 @@ const PasswordManager = () => {
     }
     setIsGeneratingInfo(true);
     try {
-      const prompt = `Analise o serviço com o nome "${form.title}" e URL "${form.url}". Escolha a melhor categoria para este serviço a partir desta exata lista: [${categories.join(', ')}]. Se não houver uma correspondência clara, use a categoria "Other". Além disso, crie uma breve nota de 1 frase descrevendo o propósito deste serviço em poucas palavras.`;
+      const prompt = `Identifica o URL oficial mais provável para o serviço com o nome "${form.title}" e o URL atual "${form.url}". Responde apenas com um URL completo e válido, incluindo https://, sem texto adicional.`;
       const schema = {
         type: "OBJECT",
         properties: {
-          category: { type: "STRING" },
-          notes: { type: "STRING" }
+          url: { type: "STRING" }
         }
       };
       const result = await callGemini(prompt, schema);
       if (result) {
+        const fallbackUrl = inferUrlFallback(form.title, form.url);
         setForm(prev => ({ 
           ...prev, 
-          category: categories.includes(result.category) ? result.category : prev.category,
-          notes: result.notes || prev.notes
+          url: result.url || fallbackUrl || prev.url
         }));
+        setAiFallbackNotice('');
         showToast("Informação preenchida com ✨ IA!");
       }
     } catch (error) {
-      showToast("Erro ao contactar a IA.");
+      const fallbackUrl = inferUrlFallback(form.title, form.url);
+      setForm(prev => ({
+        ...prev,
+        url: fallbackUrl || prev.url,
+      }));
+      setAiFallbackNotice('Modo sem IA ativo: usei sugestões locais.');
+      showToast("IA indisponível, usei sugestões locais.");
     } finally {
       setIsGeneratingInfo(false);
     }
@@ -776,83 +1055,343 @@ const PasswordManager = () => {
 
   const handleAddCategory = (e) => {
     e.preventDefault();
-    if (newCatName && !categories.includes(newCatName)) {
-      setCategories(prev => [...prev, newCatName]);
-      setFilterCat(newCatName);
+    const trimmed = newCatName.trim();
+    if (!trimmed) {
+      setIsCatModalOpen(false);
+      return;
+    }
+
+    if (editingCategory) {
+      if (editingCategory.name === trimmed) {
+        setIsCatModalOpen(false);
+        setEditingCategory(null);
+        setNewCatName('');
+        return;
+      }
+      if (categories.some(cat => cat.name.toLowerCase() === trimmed.toLowerCase())) {
+        showToast('Já existe uma pasta com esse nome.');
+        return;
+      }
+      setCategories(prev => prev.map(cat => {
+        if (cat.name !== editingCategory.name) return cat;
+        return { ...cat, name: trimmed };
+      }));
+      setPasswords(prev => prev.map(p => p.category === editingCategory.name ? { ...p, category: trimmed } : p));
+      if (selectedCategory === editingCategory.name) {
+        setSelectedCategory(trimmed);
+      }
+    } else if (!categories.some(cat => cat.name.toLowerCase() === trimmed.toLowerCase())) {
+      const nextOrder = Math.max(-1, ...categories.map(cat => Number(cat.order) || 0)) + 1;
+      setCategories(prev => [...prev, { name: trimmed, order: nextOrder }]);
+      setSelectedCategory(trimmed);
     }
     setIsCatModalOpen(false);
     setNewCatName('');
+    setEditingCategory(null);
+  };
+
+  const handleDeleteCategory = (categoryName) => {
+    if (categories.length <= 1) {
+      showToast('Precisas de manter pelo menos uma pasta.');
+      return;
+    }
+    const fallbackCategory = categories.find(cat => cat.name !== categoryName)?.name;
+    if (!fallbackCategory) {
+      showToast('Não foi possível escolher uma pasta destino.');
+      return;
+    }
+    if (!window.confirm(`Apagar a pasta "${categoryName}"? As passwords serão movidas para "${fallbackCategory}".`)) return;
+
+    setPasswords(prev => prev.map(p => p.category === categoryName ? { ...p, category: fallbackCategory } : p));
+    setCategories(prev => prev.filter(cat => cat.name !== categoryName));
+    if (selectedCategory === categoryName) {
+      setSelectedCategory(fallbackCategory);
+      setSearch('');
+    }
   };
 
   const getCatCount = (cat) => {
-    if (cat === 'All') return passwords.length;
-    if (cat === 'Favorites') return passwords.filter(p => p.favorite).length;
     return passwords.filter(p => p.category === cat).length;
   };
 
+  const totalEntries = passwords.length;
+  const favoriteEntries = passwords.filter(p => p.favorite).length;
+  const categoryEntries = categories.filter(cat => cat.name !== 'Other').length;
+
   return (
-    <div className="space-y-4 animate-in fade-in h-full flex flex-col">
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-        <h1 className="text-2xl font-bold text-[var(--text)]">{t('passwords')}</h1>
-        <Button onClick={() => handleOpenModal()} icon={Plus}>{t('addPassword')}</Button>
+    <div className="relative h-full overflow-hidden rounded-[32px] border border-[var(--border)] bg-[var(--surface)]/90 shadow-[0_30px_80px_-36px_rgba(0,0,0,0.55)]">
+      <div className="pointer-events-none absolute inset-0">
+        <div className="absolute -top-28 right-[-4rem] h-72 w-72 rounded-full bg-[var(--primary)]/15 blur-3xl"></div>
+        <div className="absolute -bottom-36 left-[-5rem] h-80 w-80 rounded-full bg-cyan-400/10 blur-3xl"></div>
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(255,255,255,0.08),transparent_32%),linear-gradient(180deg,rgba(255,255,255,0.03),transparent_22%)]"></div>
       </div>
 
-      <div className="flex space-x-3 overflow-x-auto pb-4 pt-1 scrollbar-hide snap-x">
-        {['All', 'Favorites', ...categories].map(cat => (
-          <div 
-            key={cat} 
-            onClick={() => setFilterCat(cat)} 
-            className={`snap-start flex flex-col items-start justify-center min-w-[130px] p-4 rounded-2xl border cursor-pointer transition-all ${filterCat === cat ? 'bg-[var(--primary)] border-[var(--primary)] text-white shadow-md' : 'bg-[var(--surface)] border-[var(--border)] text-[var(--text)] hover:border-[var(--primary)]'}`}
-          >
-            <div className="flex items-center space-x-2 mb-1">
-              {cat === 'Favorites' && <Star size={16} className={filterCat === cat ? 'text-white fill-current' : 'text-yellow-500'} />}
-              <span className="font-semibold text-sm truncate max-w-[100px]">{cat === 'All' ? t('all') : cat}</span>
+      <div className="relative h-full flex flex-col p-5 sm:p-6 lg:p-8">
+        <div className="mx-auto flex w-full max-w-4xl flex-col items-center text-center">
+          <h1 className="mt-4 text-3xl sm:text-4xl font-black tracking-tight text-[var(--text)]">
+            {t('passwords')}
+          </h1>
+
+          <div className="mt-6 grid w-full max-w-2xl grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4">
+            <div className="rounded-3xl border border-[var(--border)] bg-[var(--bg)]/70 p-4 text-center backdrop-blur">
+              <p className="text-[11px] uppercase tracking-[0.24em] text-[var(--text-muted)]">{t('totalPasswords')}</p>
+              <p className="mt-2 text-2xl font-black text-[var(--text)]">{totalEntries}</p>
             </div>
-            <span className={`text-xs ${filterCat === cat ? 'text-white/80' : 'text-[var(--text-muted)]'}`}>{getCatCount(cat)} {t('items')}</span>
+            <div className="rounded-3xl border border-[var(--border)] bg-[var(--bg)]/70 p-4 text-center backdrop-blur">
+              <p className="text-[11px] uppercase tracking-[0.24em] text-[var(--text-muted)]">{t('categoriesLabel')}</p>
+              <p className="mt-2 text-2xl font-black text-[var(--text)]">{categoryEntries}</p>
+            </div>
           </div>
-        ))}
-        
-        <div 
-          onClick={() => setIsCatModalOpen(true)}
-          className="snap-start flex flex-col items-center justify-center min-w-[130px] p-4 rounded-2xl border border-dashed border-[var(--border)] bg-[var(--surface)]/50 cursor-pointer transition-all hover:border-[var(--primary)] hover:bg-[var(--surface-hover)] text-[var(--text-muted)] hover:text-[var(--primary)]"
-        >
-          <Plus size={20} className="mb-1" />
-          <span className="font-semibold text-sm">{t('newCategory')}</span>
         </div>
-      </div>
 
-      <Input placeholder={t('search')} icon={Search} value={search} onChange={e => setSearch(e.target.value)} className="mb-0"/>
+        {!selectedCategory ? (
+          <div className="mt-6 flex-1 overflow-y-auto pb-4">
+            <div className="mb-5 flex justify-center">
+              <Button onClick={() => handleOpenModal()} icon={Plus} className="rounded-2xl px-5">
+                {t('addPassword')}
+              </Button>
+            </div>
 
-      <div className="flex-1 overflow-y-auto space-y-3 pb-20">
-        {filtered.length === 0 ? (
-          <div className="text-center text-[var(--text-muted)] py-10">{t('noData')}</div>
-        ) : (
-          filtered.map(item => (
-            <div key={item.id} className="bg-[var(--surface)] p-4 rounded-2xl border border-[var(--border)] flex items-center justify-between group hover:border-[var(--primary)] transition-all">
-              <div className="flex items-center space-x-4 flex-1 overflow-hidden">
-                <img src={getFavicon(item.url)} alt="" className="w-10 h-10 rounded-xl bg-[var(--bg)] p-1 object-contain" onError={(e) => { e.target.style.display='none'; e.target.nextSibling.style.display='flex'; }} />
-                <div className="w-10 h-10 rounded-xl bg-[var(--primary)]/20 text-[var(--primary)] hidden items-center justify-center font-bold text-lg">{item.title.charAt(0)}</div>
-                
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center space-x-2">
-                    <h3 className="font-semibold text-[var(--text)] truncate cursor-pointer hover:text-[var(--primary)]" onClick={() => handleOpenModal(item)}>{item.title}</h3>
-                    {item.favorite && <Star size={14} className="text-yellow-500 fill-current" />}
+            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+              {categories.map(cat => (
+                <div
+                  key={cat.name}
+                  role="button"
+                  tabIndex={0}
+                  onClick={(e) => {
+                    if (e.target.closest('[data-folder-actions="true"]')) return;
+                    setSelectedCategory(cat.name);
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      setSelectedCategory(cat.name);
+                    }
+                  }}
+                  style={getCategoryStyle(cat)}
+                  className="group relative isolate w-full max-w-[210px] justify-self-center cursor-pointer overflow-hidden rounded-[22px] p-4 text-left transition-all duration-200 hover:-translate-y-1 hover:scale-[1.01]"
+                >
+                  <div className="absolute inset-x-3 top-2 h-px bg-white/14"></div>
+                  <div className="absolute inset-x-4 bottom-3 h-4 rounded-full bg-black/25 blur-lg"></div>
+                  <div className="absolute -right-5 -top-5 h-20 w-20 rounded-full bg-white/8 blur-2xl"></div>
+                  <div data-folder-actions="true" className="absolute right-2 top-2 z-10 flex gap-1">
+                    <button
+                      type="button"
+                      onMouseDown={(e) => e.stopPropagation()}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        openEditCategory(cat);
+                      }}
+                      className="rounded-full border border-white/10 bg-black/15 p-1.5 text-white/80 backdrop-blur hover:text-white"
+                      aria-label={`Editar ${cat.name}`}
+                    >
+                      <Edit size={12} />
+                    </button>
+                    <button
+                      type="button"
+                      onMouseDown={(e) => e.stopPropagation()}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleDeleteCategory(cat.name);
+                      }}
+                      className="rounded-full border border-white/10 bg-black/15 p-1.5 text-white/80 backdrop-blur hover:text-white"
+                      aria-label={`Apagar ${cat.name}`}
+                    >
+                      <Trash size={12} />
+                    </button>
                   </div>
-                  <p className="text-sm text-[var(--text-muted)] truncate">{item.username}</p>
+                  <div className="relative flex items-start justify-between gap-3">
+                    <div>
+                      <div className="flex h-11 w-11 items-center justify-center rounded-[14px] border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.16),rgba(255,255,255,0.03))] text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.18),0_12px_20px_-16px_rgba(0,0,0,0.9)]">
+                        <Folder size={18} />
+                      </div>
+                      <h3 className="mt-3 text-sm font-semibold tracking-wide text-white">{cat.name}</h3>
+                      <p className="mt-1 text-xs text-white/75">
+                        {getCatCount(cat.name)} {t('items')}
+                      </p>
+                    </div>
+                    <ChevronRight size={15} className="mt-0.5 text-white/70 transition-transform group-hover:translate-x-1" />
+                  </div>
+                </div>
+              ))}
+
+                <button
+                  type="button"
+                  onClick={openNewCategory}
+                  className="group relative isolate w-full max-w-[210px] justify-self-center overflow-hidden rounded-[22px] p-4 text-left transition-all duration-200 hover:-translate-y-1 hover:scale-[1.01]"
+                  style={getCategoryStyle({ name: 'New', order: categories.length + 99 })}
+              >
+                <div className="absolute inset-x-3 top-2 h-px bg-white/14"></div>
+                <div className="absolute inset-x-4 bottom-3 h-4 rounded-full bg-black/22 blur-lg"></div>
+                <div className="absolute -right-5 -top-5 h-20 w-20 rounded-full bg-white/8 blur-2xl"></div>
+                <div className="relative flex items-start justify-between gap-3">
+                  <div>
+                    <div className="flex h-11 w-11 items-center justify-center rounded-[14px] border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.16),rgba(255,255,255,0.03))] text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.18),0_12px_20px_-16px_rgba(0,0,0,0.9)]">
+                      <FolderPlus size={18} />
+                    </div>
+                    <h3 className="mt-3 text-sm font-semibold tracking-wide text-white">{t('newCategory')}</h3>
+                    <p className="mt-1 text-xs text-white/75">Cria uma nova pasta</p>
+                  </div>
+                  <Plus size={14} className="mt-0.5 text-white/80 transition-transform group-hover:rotate-90" />
+                </div>
+              </button>
+            </div>
+          </div>
+        ) : (
+          <div className="mt-6 flex-1 overflow-y-auto pb-4">
+            <div className="mb-5 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+              <div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSelectedCategory(null);
+                    setSearch('');
+                  }}
+                  className="inline-flex items-center gap-2 rounded-full border border-[var(--border)] bg-[var(--bg)]/60 px-3 py-1.5 text-xs font-semibold uppercase tracking-[0.22em] text-[var(--text-muted)] transition-colors hover:border-[var(--primary)] hover:text-[var(--primary)]"
+                >
+                  <ArrowLeft size={12} />
+                  {t('backToFolders')}
+                </button>
+                <h2 className="mt-4 text-2xl font-black text-[var(--text)]">{selectedCategory}</h2>
+                <p className="mt-2 text-sm text-[var(--text-muted)]">
+                  {selectedCategoryCount} {t('items')}
+                </p>
+              </div>
+
+              <Button onClick={() => handleOpenModal()} icon={Plus} className="rounded-2xl px-5">
+                {t('addPassword')}
+              </Button>
+            </div>
+
+            <div className="grid gap-3 lg:grid-cols-[1fr_auto]">
+              <div className="rounded-2xl border border-[var(--border)] bg-[var(--bg)]/60 px-4 py-3 shadow-inner shadow-black/5">
+                <div className="flex items-center gap-3">
+                  <Search size={18} className="text-[var(--text-muted)] shrink-0" />
+                  <input
+                    value={search}
+                    onChange={e => setSearch(e.target.value)}
+                    placeholder={t('search')}
+                    className="w-full bg-transparent text-sm text-[var(--text)] placeholder:text-[var(--text-muted)] outline-none"
+                  />
                 </div>
               </div>
 
-              <div className="flex items-center space-x-1 sm:space-x-2 ml-4">
-                <div className="hidden sm:block mr-4">
-                   <SecretText text={item.password} />
-                </div>
-                <button onClick={() => copyToClipboard(item.username)} className="p-2 text-[var(--text-muted)] hover:text-[var(--text)] hover:bg-[var(--surface-hover)] rounded-lg tooltip-trigger"><Copy size={18} /></button>
-                <button onClick={() => handleOpenModal(item)} className="p-2 text-[var(--text-muted)] hover:text-[var(--primary)] hover:bg-[var(--primary)]/10 rounded-lg"><Edit size={18} /></button>
+              <div className="hidden lg:flex items-center rounded-2xl border border-[var(--border)] bg-[var(--bg)]/60 px-4 py-3 text-sm text-[var(--text-muted)]">
+                {selectedCategory}
               </div>
             </div>
-          ))
+
+            <div className="mt-5">
+              {filtered.length === 0 ? (
+                <div className="flex h-[180px] items-center justify-center rounded-[28px] border border-dashed border-[var(--border)] bg-[var(--bg)]/30 text-[var(--text-muted)]">
+                  <span className="text-sm">{selectedCategory}</span>
+                </div>
+              ) : (
+                <div className="grid gap-4 xl:grid-cols-2">
+                  {filtered.map(item => (
+                    <div
+                      key={item.id}
+                      className="group relative overflow-hidden rounded-[24px] border border-[var(--border)] bg-[linear-gradient(180deg,rgba(255,255,255,0.04),rgba(255,255,255,0.015))] p-3.5 transition-all duration-200 hover:-translate-y-1 hover:border-[var(--primary)]/50 hover:shadow-[0_16px_36px_-28px_rgba(0,0,0,0.8)]"
+                    >
+                      <div className={`absolute inset-x-0 top-0 h-1 bg-gradient-to-r ${item.favorite ? 'from-yellow-400 via-orange-400 to-rose-500' : 'from-[var(--primary)] via-cyan-400 to-emerald-400'}`}></div>
+                      <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(255,255,255,0.08),transparent_28%)] pointer-events-none"></div>
+
+                      <div className="relative flex items-start gap-3.5">
+                        <div className="flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-[18px] border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.12),rgba(255,255,255,0.03))] shadow-[inset_0_1px_0_rgba(255,255,255,0.16),0_12px_20px_-16px_rgba(0,0,0,0.85)]">
+                          <img
+                            src={getFavicon(item.url)}
+                            alt=""
+                            className="h-7 w-7 object-contain"
+                            onError={(e) => { e.target.style.display='none'; e.target.nextSibling.style.display='flex'; }}
+                          />
+                          <div className="hidden h-12 w-12 items-center justify-center text-base font-black text-white/90">
+                            {item.title.charAt(0)}
+                          </div>
+                        </div>
+
+                        <div className="min-w-0 flex-1">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <h3 className="truncate text-sm font-semibold text-[var(--text)]">
+                              {item.title}
+                            </h3>
+                            {item.favorite && <Star size={14} className="fill-current text-yellow-500" />}
+                          </div>
+
+                          <div className="mt-3.5 space-y-2.5">
+                            <div className="flex items-center gap-2.5 rounded-[16px] border border-white/10 bg-black/12 px-3.5 py-2.5">
+                              <div className="min-w-0 flex-1">
+                                <p className="text-[10px] font-semibold uppercase tracking-[0.24em] text-[var(--text-muted)]">Utilizador</p>
+                                <p className="mt-0.5 truncate text-xs font-medium text-[var(--text)]">{item.username || '—'}</p>
+                              </div>
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  copyToClipboard(item.username);
+                                }}
+                                className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-[var(--border)] bg-[var(--surface)] text-[var(--text-muted)] transition-all hover:-translate-y-0.5 hover:border-[var(--primary)] hover:text-[var(--primary)]"
+                                title="Copiar utilizador"
+                              >
+                                <Copy size={14} />
+                              </button>
+                            </div>
+
+                            <div className="flex items-center gap-2.5 rounded-[16px] border border-white/10 bg-black/12 px-3.5 py-2.5">
+                              <div className="min-w-0 flex-1">
+                                <p className="text-[10px] font-semibold uppercase tracking-[0.24em] text-[var(--text-muted)]">Password</p>
+                                <div className="mt-0.5 text-xs font-medium text-[var(--text)]">
+                                  <SecretText text={item.password} />
+                                </div>
+                              </div>
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  copyToClipboard(item.password);
+                                }}
+                                className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-[var(--border)] bg-[var(--surface)] text-[var(--text-muted)] transition-all hover:-translate-y-0.5 hover:border-[var(--primary)] hover:text-[var(--primary)]"
+                                title="Copiar password"
+                              >
+                                <Key size={14} />
+                              </button>
+                            </div>
+
+                            <div className="flex items-center justify-center gap-2 pt-0.5">
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleOpenModal(item);
+                                }}
+                                className="inline-flex items-center gap-1.5 rounded-full border border-[var(--border)] bg-[var(--surface)] px-3.5 py-1.5 text-[11px] font-medium text-[var(--text-muted)] transition-all hover:-translate-y-0.5 hover:border-[var(--primary)] hover:text-[var(--primary)]"
+                                title="Editar"
+                              >
+                                <Edit size={14} />
+                                <span>Editar</span>
+                              </button>
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleDelete(item.id);
+                                }}
+                                className="inline-flex items-center gap-1.5 rounded-full border border-[var(--border)] bg-[var(--surface)] px-3.5 py-1.5 text-[11px] font-medium text-[var(--text-muted)] transition-all hover:-translate-y-0.5 hover:border-[var(--danger)] hover:text-[var(--danger)]"
+                                title="Apagar"
+                              >
+                                <Trash size={14} />
+                                <span>Apagar</span>
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
         )}
-      </div>
 
       <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title={editingItem ? t('edit') : t('addPassword')}>
         <form onSubmit={handleSave} className="space-y-4">
@@ -876,10 +1415,17 @@ const PasswordManager = () => {
                 {t('smartFill')}
               </button>
               <select value={form.category} onChange={e => setForm({...form, category: e.target.value})} className="bg-transparent text-sm text-[var(--text)] border border-[var(--border)] rounded-lg p-1 outline-none">
-                {categories.map(c => <option key={c} value={c}>{c}</option>)}
+                {categoryOptions.map(c => <option key={c} value={c}>{c}</option>)}
               </select>
             </div>
           </div>
+
+          {aiFallbackNotice && (
+            <div className="rounded-xl border border-amber-500/30 bg-amber-500/8 px-3 py-2 text-xs text-amber-200/90 flex items-center gap-2">
+              <AlertTriangle size={14} className="shrink-0" />
+              <span>{aiFallbackNotice}</span>
+            </div>
+          )}
 
           <Input label={t('serviceName')} value={form.title} onChange={e => setForm({...form, title: e.target.value})} required />
           <Input label={t('url')} value={form.url} onChange={e => setForm({...form, url: e.target.value})} placeholder="https://" />
@@ -904,15 +1450,19 @@ const PasswordManager = () => {
         </form>
       </Modal>
 
-      <Modal isOpen={isCatModalOpen} onClose={() => setIsCatModalOpen(false)} title={t('newCategory')}>
+      <Modal isOpen={isCatModalOpen} onClose={() => setIsCatModalOpen(false)} title={editingCategory ? t('editCategory') : t('newCategory')}>
         <form onSubmit={handleAddCategory} className="space-y-4">
           <Input label={t('categoryName')} value={newCatName} onChange={e => setNewCatName(e.target.value)} required autoFocus />
+          <p className="text-xs text-[var(--text-muted)]">
+            A cor desta pasta é atribuída automaticamente e não se repete.
+          </p>
           <div className="flex space-x-3 pt-4">
             <Button type="button" variant="secondary" onClick={() => setIsCatModalOpen(false)} className="flex-1">{t('cancel')}</Button>
             <Button type="submit" className="flex-1">{t('save')}</Button>
           </div>
         </form>
       </Modal>
+    </div>
     </div>
   );
 };
@@ -1031,6 +1581,304 @@ const CardManager = () => {
   );
 };
 
+const GlobalQuickCreateModals = () => {
+  const { quickCreate, setQuickCreate, categories, setPasswords, setCards, t } = useContext(AppContext);
+  const [passwordForm, setPasswordForm] = useState({ title: '', url: '', username: '', password: '', notes: '', category: 'Other', favorite: false });
+  const [cardForm, setCardForm] = useState({ name: '', number: '', holder: '', expiry: '', cvv: '', pin: '', color: 'from-blue-600 to-blue-900' });
+  const [isGeneratingInfo, setIsGeneratingInfo] = useState(false);
+  const [aiFallbackNotice, setAiFallbackNotice] = useState('');
+
+  const CARD_COLORS = [
+    'from-blue-600 to-blue-900', 'from-gray-700 to-black', 'from-emerald-500 to-emerald-900',
+    'from-rose-500 to-rose-900', 'from-purple-600 to-purple-900', 'from-orange-500 to-red-600'
+  ];
+
+  useEffect(() => {
+    if (quickCreate === 'password') {
+      setPasswordForm({ title: '', url: '', username: '', password: '', notes: '', category: 'Other', favorite: false });
+    }
+    if (quickCreate === 'card') {
+      setCardForm({ name: '', number: '', holder: '', expiry: '', cvv: '', pin: '', color: CARD_COLORS[0] });
+    }
+  }, [quickCreate]);
+
+  if (!quickCreate) return null;
+
+  const handleSavePassword = (e) => {
+    e.preventDefault();
+    setPasswords(prev => [{ ...passwordForm, id: Date.now().toString(), date: Date.now() }, ...prev]);
+    setQuickCreate(null);
+  };
+
+  const handleSaveCard = (e) => {
+    e.preventDefault();
+    setCards(prev => [{ ...cardForm, id: Date.now().toString(), date: Date.now() }, ...prev]);
+    setQuickCreate(null);
+  };
+
+  const handleSmartFillPassword = async () => {
+    if (!passwordForm.title && !passwordForm.url) {
+      return;
+    }
+
+    setIsGeneratingInfo(true);
+    try {
+      const prompt = `Identifica o URL oficial mais provável para o serviço com o nome "${passwordForm.title}" e o URL atual "${passwordForm.url}". Responde apenas com um URL completo e válido, incluindo https://, sem texto adicional.`;
+      const schema = {
+        type: "OBJECT",
+        properties: {
+          url: { type: "STRING" }
+        }
+      };
+      const result = await callGemini(prompt, schema);
+      const fallbackUrl = inferUrlFallback(passwordForm.title, passwordForm.url);
+      setPasswordForm(prev => ({ ...prev, url: result?.url || fallbackUrl || prev.url }));
+      setAiFallbackNotice('');
+    } catch {
+      const fallbackUrl = inferUrlFallback(passwordForm.title, passwordForm.url);
+      setPasswordForm(prev => ({ ...prev, url: fallbackUrl || prev.url }));
+      setAiFallbackNotice('Modo sem IA ativo: usei uma URL sugerida localmente.');
+    } finally {
+      setIsGeneratingInfo(false);
+    }
+  };
+
+  const passwordPreview = passwordForm.url ? getFavicon(passwordForm.url) : null;
+  const cardType = getCardType(cardForm.number || '');
+
+  return (
+    <>
+      <Modal isOpen={quickCreate === 'password'} onClose={() => setQuickCreate(null)} title={t('addPassword')}>
+        <form onSubmit={handleSavePassword} className="space-y-4">
+          <div className="flex items-center justify-center mb-4">
+            <img src={passwordPreview} alt="" className="w-16 h-16 rounded-2xl bg-[var(--bg)] p-2 border border-[var(--border)]" onError={(e) => { e.target.style.display='none'; e.target.nextSibling.style.display='flex'; }} />
+            <div className="w-16 h-16 rounded-2xl bg-[var(--primary)]/20 text-[var(--primary)] hidden items-center justify-center font-bold text-2xl border border-[var(--border)]">{passwordForm.title ? passwordForm.title.charAt(0) : <Globe/>}</div>
+          </div>
+
+          <div className="flex items-center justify-end">
+            <button
+              type="button"
+              onClick={handleSmartFillPassword}
+              disabled={isGeneratingInfo || (!passwordForm.title && !passwordForm.url)}
+              className="flex items-center text-xs font-medium px-2 py-1 rounded bg-gradient-to-r from-purple-500/10 to-pink-500/10 text-purple-500 hover:from-purple-500/20 hover:to-pink-500/20 border border-purple-500/30 transition-all disabled:opacity-50"
+            >
+              {isGeneratingInfo ? <Loader2 size={12} className="animate-spin mr-1"/> : <Sparkles size={12} className="mr-1"/>}
+              {t('smartFill')}
+            </button>
+          </div>
+
+          {aiFallbackNotice && (
+            <div className="rounded-xl border border-amber-500/30 bg-amber-500/8 px-3 py-2 text-xs text-amber-200/90 flex items-center gap-2">
+              <AlertTriangle size={14} className="shrink-0" />
+              <span>{aiFallbackNotice}</span>
+            </div>
+          )}
+
+          <Input label={t('serviceName')} value={passwordForm.title} onChange={e => setPasswordForm({...passwordForm, title: e.target.value})} required />
+          <Input label={t('url')} value={passwordForm.url} onChange={e => setPasswordForm({...passwordForm, url: e.target.value})} placeholder="https://" />
+          <Input label={t('username')} value={passwordForm.username} onChange={e => setPasswordForm({...passwordForm, username: e.target.value})} />
+          <Input label={t('password')} type="password" value={passwordForm.password} onChange={e => setPasswordForm({...passwordForm, password: e.target.value})} required />
+          <Input label={t('notes')} value={passwordForm.notes} onChange={e => setPasswordForm({...passwordForm, notes: e.target.value})} />
+          <div>
+            <label className="text-sm font-medium text-[var(--text-muted)] mb-2 block">{t('category')}</label>
+            <select value={passwordForm.category} onChange={e => setPasswordForm({...passwordForm, category: e.target.value})} className="w-full bg-transparent text-sm text-[var(--text)] border border-[var(--border)] rounded-lg p-2 outline-none">
+              {categories.map(cat => <option key={cat.name} value={cat.name}>{cat.name}</option>)}
+            </select>
+          </div>
+
+          <div className="flex space-x-3 pt-4">
+            <Button type="button" variant="secondary" onClick={() => setQuickCreate(null)} className="flex-1">{t('cancel')}</Button>
+            <Button type="submit" className="flex-1">{t('save')}</Button>
+          </div>
+        </form>
+      </Modal>
+
+      <Modal isOpen={quickCreate === 'card'} onClose={() => setQuickCreate(null)} title={t('addCard')}>
+        <div className="mb-6">
+          <div className={`relative h-48 rounded-2xl p-6 text-white shadow-xl bg-gradient-to-br ${cardForm.color} overflow-hidden border border-white/10`}>
+            <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full blur-2xl -mr-10 -mt-10"></div>
+            <div className="relative z-10 flex flex-col justify-between h-full">
+              <div className="flex justify-between items-start">
+                <h3 className="font-semibold tracking-wider text-white/90">{cardForm.name || 'My Card'}</h3>
+                <span className="font-bold italic text-lg opacity-80">{cardType}</span>
+              </div>
+              <div>
+                <div className="font-mono text-xl tracking-widest mb-2 text-white/80">
+                  {cardForm.number ? formatCardNumber(cardForm.number).replace(/\d(?=\d{4})/g, "•") : '•••• •••• •••• ••••'}
+                </div>
+                <div className="flex justify-between text-sm text-white/70">
+                  <span className="uppercase tracking-widest">{cardForm.holder || 'NAME'}</span>
+                  <span className="font-mono">{cardForm.expiry || 'MM/YY'}</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <form onSubmit={handleSaveCard} className="space-y-4">
+          <Input label={t('serviceName')} value={cardForm.name} onChange={e => setCardForm({...cardForm, name: e.target.value})} placeholder="e.g. Personal Visa" required />
+          <Input label={t('cardNumber')} value={formatCardNumber(cardForm.number)} onChange={e => setCardForm({...cardForm, number: e.target.value.replace(/\D/g, '')})} maxLength={19} required />
+          <Input label={t('cardHolder')} value={cardForm.holder} onChange={e => setCardForm({...cardForm, holder: e.target.value.toUpperCase()})} />
+          <div className="grid grid-cols-3 gap-4">
+            <Input label={t('expiry')} value={cardForm.expiry} onChange={e => setCardForm({...cardForm, expiry: e.target.value})} placeholder="MM/YY" />
+            <Input label={t('cvv')} type="password" value={cardForm.cvv} onChange={e => setCardForm({...cardForm, cvv: e.target.value.replace(/\D/g, '')})} maxLength={4} />
+            <Input label={t('pin')} type="password" value={cardForm.pin} onChange={e => setCardForm({...cardForm, pin: e.target.value.replace(/\D/g, '')})} maxLength={6} />
+          </div>
+
+          <div>
+            <label className="text-sm font-medium text-[var(--text-muted)] mb-2 block">Card Style</label>
+            <div className="flex space-x-2">
+              {CARD_COLORS.map(color => (
+                <button key={color} type="button" onClick={() => setCardForm({...cardForm, color})} className={`w-8 h-8 rounded-full bg-gradient-to-br ${color} ${cardForm.color === color ? 'ring-2 ring-offset-2 ring-offset-[var(--surface)] ring-[var(--primary)]' : ''}`} />
+              ))}
+            </div>
+          </div>
+
+          <div className="flex space-x-3 pt-4">
+            <Button type="button" variant="secondary" onClick={() => setQuickCreate(null)} className="flex-1">{t('cancel')}</Button>
+            <Button type="submit" className="flex-1">{t('save')}</Button>
+          </div>
+        </form>
+      </Modal>
+    </>
+  );
+};
+
+const GlobalQuickEditModals = () => {
+  const { quickEdit, setQuickEdit, categories, setPasswords, setCards, t } = useContext(AppContext);
+  const [passwordForm, setPasswordForm] = useState(null);
+  const [cardForm, setCardForm] = useState(null);
+
+  const CARD_COLORS = [
+    'from-blue-600 to-blue-900', 'from-gray-700 to-black', 'from-emerald-500 to-emerald-900',
+    'from-rose-500 to-rose-900', 'from-purple-600 to-purple-900', 'from-orange-500 to-red-600'
+  ];
+
+  useEffect(() => {
+    if (!quickEdit) {
+      setPasswordForm(null);
+      setCardForm(null);
+      return;
+    }
+
+    if (quickEdit.type === 'password') {
+      setPasswordForm({ ...quickEdit.item });
+      setCardForm(null);
+    }
+
+    if (quickEdit.type === 'card') {
+      setCardForm({ ...quickEdit.item });
+      setPasswordForm(null);
+    }
+  }, [quickEdit]);
+
+  if (!quickEdit) return null;
+
+  const handleSavePassword = (e) => {
+    e.preventDefault();
+    setPasswords(prev => prev.map(p => p.id === passwordForm.id ? { ...passwordForm, date: Date.now() } : p));
+    setQuickEdit(null);
+  };
+
+  const handleSaveCard = (e) => {
+    e.preventDefault();
+    setCards(prev => prev.map(c => c.id === cardForm.id ? { ...cardForm, date: Date.now() } : c));
+    setQuickEdit(null);
+  };
+
+  const passwordPreview = passwordForm?.url ? getFavicon(passwordForm.url) : null;
+  const cardType = getCardType(cardForm?.number || '');
+
+  return (
+    <>
+      <Modal isOpen={quickEdit?.type === 'password'} onClose={() => setQuickEdit(null)} title={t('edit')}>
+        {passwordForm && (
+          <form onSubmit={handleSavePassword} className="space-y-4">
+            <div className="flex items-center justify-center mb-4">
+              <img src={passwordPreview} alt="" className="w-16 h-16 rounded-2xl bg-[var(--bg)] p-2 border border-[var(--border)]" onError={(e) => { e.target.style.display='none'; e.target.nextSibling.style.display='flex'; }} />
+              <div className="w-16 h-16 rounded-2xl bg-[var(--primary)]/20 text-[var(--primary)] hidden items-center justify-center font-bold text-2xl border border-[var(--border)]">{passwordForm.title ? passwordForm.title.charAt(0) : <Globe/>}</div>
+            </div>
+
+            <Input label={t('serviceName')} value={passwordForm.title} onChange={e => setPasswordForm({...passwordForm, title: e.target.value})} required />
+            <Input label={t('url')} value={passwordForm.url} onChange={e => setPasswordForm({...passwordForm, url: e.target.value})} placeholder="https://" />
+            <Input label={t('username')} value={passwordForm.username} onChange={e => setPasswordForm({...passwordForm, username: e.target.value})} />
+            <Input label={t('password')} type="password" value={passwordForm.password} onChange={e => setPasswordForm({...passwordForm, password: e.target.value})} required />
+            <Input label={t('notes')} value={passwordForm.notes} onChange={e => setPasswordForm({...passwordForm, notes: e.target.value})} />
+            <div>
+              <label className="text-sm font-medium text-[var(--text-muted)] mb-2 block">{t('category')}</label>
+              <select value={passwordForm.category} onChange={e => setPasswordForm({...passwordForm, category: e.target.value})} className="w-full bg-transparent text-sm text-[var(--text)] border border-[var(--border)] rounded-lg p-2 outline-none">
+                {categories.map(cat => <option key={cat.name} value={cat.name}>{cat.name}</option>)}
+              </select>
+            </div>
+            <div className="flex items-center justify-between">
+              <button type="button" onClick={() => setPasswordForm({...passwordForm, favorite: !passwordForm.favorite})} className={`text-sm flex items-center ${passwordForm.favorite ? 'text-yellow-500' : 'text-[var(--text-muted)]'}`}>
+                <Star size={16} className={`mr-1 ${passwordForm.favorite ? 'fill-current' : ''}`} /> {t('favorites')}
+              </button>
+            </div>
+
+            <div className="flex space-x-3 pt-4">
+              <Button type="button" variant="secondary" onClick={() => setQuickEdit(null)} className="flex-1">{t('cancel')}</Button>
+              <Button type="submit" className="flex-1">{t('save')}</Button>
+            </div>
+          </form>
+        )}
+      </Modal>
+
+      <Modal isOpen={quickEdit?.type === 'card'} onClose={() => setQuickEdit(null)} title={t('edit')}>
+        {cardForm && (
+          <>
+            <div className="mb-6">
+              <div className={`relative h-48 rounded-2xl p-6 text-white shadow-xl bg-gradient-to-br ${cardForm.color} overflow-hidden border border-white/10`}>
+                <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full blur-2xl -mr-10 -mt-10"></div>
+                <div className="relative z-10 flex flex-col justify-between h-full">
+                  <div className="flex justify-between items-start">
+                    <h3 className="font-semibold tracking-wider text-white/90">{cardForm.name || 'My Card'}</h3>
+                    <span className="font-bold italic text-lg opacity-80">{cardType}</span>
+                  </div>
+                  <div>
+                    <div className="font-mono text-xl tracking-widest mb-2 text-white/80">
+                      {cardForm.number ? formatCardNumber(cardForm.number).replace(/\d(?=\d{4})/g, "•") : '•••• •••• •••• ••••'}
+                    </div>
+                    <div className="flex justify-between text-sm text-white/70">
+                      <span className="uppercase tracking-widest">{cardForm.holder || 'NAME'}</span>
+                      <span className="font-mono">{cardForm.expiry || 'MM/YY'}</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <form onSubmit={handleSaveCard} className="space-y-4">
+              <Input label={t('serviceName')} value={cardForm.name} onChange={e => setCardForm({...cardForm, name: e.target.value})} placeholder="e.g. Personal Visa" required />
+              <Input label={t('cardNumber')} value={formatCardNumber(cardForm.number)} onChange={e => setCardForm({...cardForm, number: e.target.value.replace(/\D/g, '')})} maxLength={19} required />
+              <Input label={t('cardHolder')} value={cardForm.holder} onChange={e => setCardForm({...cardForm, holder: e.target.value.toUpperCase()})} />
+              <div className="grid grid-cols-3 gap-4">
+                <Input label={t('expiry')} value={cardForm.expiry} onChange={e => setCardForm({...cardForm, expiry: e.target.value})} placeholder="MM/YY" />
+                <Input label={t('cvv')} type="password" value={cardForm.cvv} onChange={e => setCardForm({...cardForm, cvv: e.target.value.replace(/\D/g, '')})} maxLength={4} />
+                <Input label={t('pin')} type="password" value={cardForm.pin} onChange={e => setCardForm({...cardForm, pin: e.target.value.replace(/\D/g, '')})} maxLength={6} />
+              </div>
+
+              <div>
+                <label className="text-sm font-medium text-[var(--text-muted)] mb-2 block">Card Style</label>
+                <div className="flex space-x-2">
+                  {CARD_COLORS.map(color => (
+                    <button key={color} type="button" onClick={() => setCardForm({...cardForm, color})} className={`w-8 h-8 rounded-full bg-gradient-to-br ${color} ${cardForm.color === color ? 'ring-2 ring-offset-2 ring-offset-[var(--surface)] ring-[var(--primary)]' : ''}`} />
+                  ))}
+                </div>
+              </div>
+
+              <div className="flex space-x-3 pt-4">
+                <Button type="button" variant="secondary" onClick={() => setQuickEdit(null)} className="flex-1">{t('cancel')}</Button>
+                <Button type="submit" className="flex-1">{t('save')}</Button>
+              </div>
+            </form>
+          </>
+        )}
+      </Modal>
+    </>
+  );
+};
+
 const PasswordGenerator = () => {
   const { t, copyToClipboard } = useContext(AppContext);
   const [length, setLength] = useState(16);
@@ -1039,6 +1887,7 @@ const PasswordGenerator = () => {
   
   const [themePrompt, setThemePrompt] = useState('');
   const [isGeneratingAI, setIsGeneratingAI] = useState(false);
+  const [aiFallbackNotice, setAiFallbackNotice] = useState('');
 
   const generate = useCallback(() => {
     let chars = '';
@@ -1072,9 +1921,15 @@ const PasswordGenerator = () => {
       const result = await callGemini(prompt, schema);
       if (result && result.passphrase) {
         setGenerated(result.passphrase);
+        setAiFallbackNotice('');
+      } else {
+        setGenerated(buildFallbackPassphrase(themePrompt));
+        setAiFallbackNotice('Modo sem IA ativo: passphrase gerada localmente.');
       }
     } catch (error) {
-      // Fail silently
+      setGenerated(buildFallbackPassphrase(themePrompt));
+      setAiFallbackNotice('Modo sem IA ativo: passphrase gerada localmente.');
+      showToast("IA indisponível, foi gerada uma alternativa local.");
     } finally {
       setIsGeneratingAI(false);
     }
@@ -1119,10 +1974,16 @@ const PasswordGenerator = () => {
               onClick={handleSmartPassphrase} 
               disabled={isGeneratingAI || !themePrompt}
               className="bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-500 hover:to-pink-500 border-none px-4 text-white shadow-lg shadow-purple-500/20"
-            >
-              {isGeneratingAI ? <Loader2 size={18} className="animate-spin" /> : <Sparkles size={18} />}
-            </Button>
+              >
+                {isGeneratingAI ? <Loader2 size={18} className="animate-spin" /> : <Sparkles size={18} />}
+              </Button>
           </div>
+          {aiFallbackNotice && (
+            <div className="mt-3 rounded-xl border border-amber-500/30 bg-amber-500/8 px-3 py-2 text-xs text-amber-200/90 flex items-center gap-2">
+              <AlertTriangle size={14} className="shrink-0" />
+              <span>{aiFallbackNotice}</span>
+            </div>
+          )}
         </div>
 
         <div className="space-y-6">
@@ -1288,12 +2149,15 @@ const MainLayout = () => {
           ))}
         </nav>
       </main>
+      <GlobalQuickCreateModals />
+      <GlobalQuickEditModals />
     </div>
   );
 };
 
 const AppContent = () => {
   const { isLocked } = useContext(AppContext);
+  if (PREVIEW_MODE) return <MainLayout />;
   return isLocked ? <AuthScreen /> : <MainLayout />;
 };
 

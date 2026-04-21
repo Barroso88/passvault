@@ -1,13 +1,14 @@
 const express = require('express');
 const cors = require('cors');
 const { Pool } = require('pg');
+const path = require('path');
+require('dotenv').config({ path: path.join(__dirname, '../.env') });
 
 const app = express();
 app.use(cors()); // Permite que o frontend React fale com esta API
 app.use(express.json({ limit: '10mb' }));
 
 // Configuração para o backend servir os ficheiros estáticos do frontend compilado
-const path = require('path');
 app.use(express.static(path.join(__dirname, '../frontend/dist')));
 
 // Ligação à base de dados PostgreSQL
@@ -17,6 +18,47 @@ const pool = new Pool({
 
 // Para este caso de uso simples e pessoal, usamos um ID fixo para o cofre.
 const USER_ID = 'admin_vault';
+const GEMINI_API_KEY = process.env.GEMINI_API_KEY || process.env.VITE_GEMINI_API_KEY;
+const GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-flash-latest';
+
+async function callGemini(prompt, schema) {
+    if (!GEMINI_API_KEY) {
+        const err = new Error('GEMINI_API_KEY não configurada.');
+        err.status = 503;
+        throw err;
+    }
+
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${GEMINI_API_KEY}`;
+    const payload = {
+        contents: [{ parts: [{ text: prompt }] }],
+        generationConfig: {
+            responseMimeType: 'application/json',
+            responseSchema: schema
+        }
+    };
+
+    const res = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+    });
+
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+        const err = new Error(data?.error?.message || 'Falha ao contactar Gemini.');
+        err.status = res.status;
+        throw err;
+    }
+
+    const text = data?.candidates?.[0]?.content?.parts?.[0]?.text;
+    if (!text) {
+        const err = new Error('Gemini devolveu uma resposta vazia.');
+        err.status = 502;
+        throw err;
+    }
+
+    return JSON.parse(text);
+}
 
 // 1. Verificar se o cofre já foi criado
 app.get('/api/status', async (req, res) => {
@@ -82,6 +124,20 @@ app.put('/api/sync', async (req, res) => {
         res.json({ success: true });
     } catch (err) {
         res.status(500).json({ error: err.message });
+    }
+});
+
+app.post('/api/ai/generate', async (req, res) => {
+    const { prompt, schema } = req.body || {};
+    if (!prompt || !schema) {
+        return res.status(400).json({ error: 'Prompt e schema são obrigatórios.' });
+    }
+
+    try {
+        const result = await callGemini(prompt, schema);
+        res.json({ result });
+    } catch (err) {
+        res.status(err.status || 500).json({ error: err.message });
     }
 });
 

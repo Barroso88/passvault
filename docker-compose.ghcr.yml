@@ -18,22 +18,17 @@ services:
       - passvault_net
 
   app:
-    build:
-      context: .
-      dockerfile: Dockerfile
-      args:
-        VITE_API_URL: /api
-    image: passvault:local
+    image: ghcr.io/barroso88/passvault:latest
     container_name: passvault-app
     env_file:
       - .env
+    environment:
+      DATABASE_URL: postgres://passvault_user:passvault_secret@postgres:5432/passvault
+      PORT: 3001
     ports:
       - "3001:3001"
     depends_on:
       - postgres
-    environment:
-      DATABASE_URL: postgres://passvault_user:passvault_secret@postgres:5432/passvault
-      PORT: 3001
     restart: unless-stopped
     networks:
       - passvault_net
