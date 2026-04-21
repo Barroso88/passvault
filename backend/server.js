@@ -36,6 +36,19 @@ const pendingWebAuthn = {
 
 const toBase64Url = (value) => Buffer.from(value).toString('base64url');
 const fromBase64Url = (value) => Buffer.from(value, 'base64url');
+const toCredentialIdString = (value) => {
+    if (typeof value === 'string') return value;
+    if (value instanceof Uint8Array || Buffer.isBuffer(value)) {
+        return toBase64Url(value);
+    }
+    if (value && ArrayBuffer.isView(value)) {
+        return toBase64Url(Buffer.from(value.buffer, value.byteOffset, value.byteLength));
+    }
+    if (value instanceof ArrayBuffer) {
+        return toBase64Url(Buffer.from(value));
+    }
+    return '';
+};
 
 const normalizeJson = (value, fallback) => {
     if (value == null) return fallback;
@@ -133,7 +146,7 @@ function buildCredentialDescriptor(cred) {
         throw new Error('Credencial biométrica inválida.');
     }
     return {
-        id: fromBase64Url(cred.id),
+        id: toCredentialIdString(cred.id),
         type: 'public-key',
         transports: cred.transports || undefined,
     };
