@@ -546,12 +546,21 @@ const normalizeBufferSource = (value) => {
   return null;
 };
 
+const normalizePrfSeed = (value) => {
+  const bufferSource = normalizeBufferSource(value);
+  if (bufferSource) return bufferSource;
+  if (typeof value === 'string') return base64URLStringToBuffer(value);
+  return null;
+};
+
 const buildPrfExtensionsForCredentials = (credentials = []) => {
   const evalByCredential = {};
   (Array.isArray(credentials) ? credentials : []).forEach((credential) => {
     if (!credential?.id || !credential?.prfSalt) return;
+    const prfSeed = normalizePrfSeed(credential.prfSalt);
+    if (!prfSeed) return;
     evalByCredential[credential.id] = {
-      first: base64URLStringToBuffer(credential.prfSalt),
+      first: prfSeed,
     };
   });
 
@@ -565,11 +574,12 @@ const buildPrfExtensionsForCredentials = (credentials = []) => {
 };
 
 const buildPrfExtensionsForSalt = (prfSalt) => {
-  if (!prfSalt) return undefined;
+  const prfSeed = normalizePrfSeed(prfSalt);
+  if (!prfSeed) return undefined;
   return {
     prf: {
       eval: {
-        first: base64URLStringToBuffer(prfSalt),
+        first: prfSeed,
       },
     },
   };
