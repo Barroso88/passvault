@@ -2,7 +2,7 @@ import React, { useState, useEffect, useContext, createContext, useMemo, useRef,
 import { 
   Lock, Unlock, Shield, Key, CreditCard, LayoutDashboard, Settings, Plus, 
   Search, Eye, EyeOff, Copy, Trash, Edit, Check, Star, AlertTriangle, 
-  LogOut, Clock, Globe, Menu, X, ChevronRight, Hash, RefreshCw, Palette, Sparkles, Loader2,
+  LogOut, Clock, Globe, Menu, X, ChevronRight, ChevronDown, Hash, RefreshCw, Palette, Sparkles, Loader2,
   Folder, FolderPlus, ArrowLeft
 } from 'lucide-react';
 
@@ -12,6 +12,9 @@ import {
 // Alterar 'localhost' para o IP do seu Unraid quando compilar (ex: 192.168.1.100)
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
 const PREVIEW_MODE = import.meta.env.VITE_PREVIEW_MODE === 'true';
+const VAULT_KDF_ITERATIONS = 250000;
+const textEncoder = new TextEncoder();
+const textDecoder = new TextDecoder();
 
 // ==========================================
 // 1. CONSTANTS, THEMES & TRANSLATIONS
@@ -383,6 +386,98 @@ const readPreviewState = (key, fallback) => {
   }
 };
 
+const bytesToBase64 = (bytes) => {
+  let binary = '';
+  const chunkSize = 0x8000;
+  for (let i = 0; i < bytes.length; i += chunkSize) {
+    binary += String.fromCharCode(...bytes.subarray(i, i + chunkSize));
+  }
+  return btoa(binary);
+};
+
+const base64ToBytes = (value = '') => {
+  if (!value) return new Uint8Array();
+  const binary = atob(value);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i += 1) {
+    bytes[i] = binary.charCodeAt(i);
+  }
+  return bytes;
+};
+
+const generateVaultSalt = () => {
+  const bytes = crypto.getRandomValues(new Uint8Array(16));
+  return bytesToBase64(bytes);
+};
+
+const deriveVaultMaterial = async (password, saltBase64) => {
+  const salt = base64ToBytes(saltBase64);
+  const passwordKey = await crypto.subtle.importKey(
+    'raw',
+    textEncoder.encode(password),
+    'PBKDF2',
+    false,
+    ['deriveBits']
+  );
+
+  const derivedBits = await crypto.subtle.deriveBits(
+    {
+      name: 'PBKDF2',
+      hash: 'SHA-256',
+      salt,
+      iterations: VAULT_KDF_ITERATIONS,
+    },
+    passwordKey,
+    256
+  );
+
+  const derivedBytes = new Uint8Array(derivedBits);
+  const verifier = bytesToBase64(derivedBytes);
+  const key = await crypto.subtle.importKey(
+    'raw',
+    derivedBytes,
+    { name: 'AES-GCM' },
+    false,
+    ['encrypt', 'decrypt']
+  );
+
+  return { key, verifier, salt: saltBase64 };
+};
+
+const encryptVaultObject = async (value, key) => {
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const encoded = textEncoder.encode(JSON.stringify(value));
+  const encrypted = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, key, encoded);
+  return {
+    v: 1,
+    iv: bytesToBase64(iv),
+    data: bytesToBase64(new Uint8Array(encrypted)),
+  };
+};
+
+const decryptVaultObject = async (value, key) => {
+  if (!value || typeof value !== 'object' || value.v !== 1 || !value.iv || !value.data) {
+    return value;
+  }
+
+  const plain = await crypto.subtle.decrypt(
+    { name: 'AES-GCM', iv: base64ToBytes(value.iv) },
+    key,
+    base64ToBytes(value.data)
+  );
+  return JSON.parse(textDecoder.decode(plain));
+};
+
+const encryptVaultArray = async (records = [], key) => {
+  if (!key) return records;
+  return Promise.all((Array.isArray(records) ? records : []).map(record => encryptVaultObject(record, key)));
+};
+
+const decryptVaultArray = async (records = [], key) => {
+  if (!key) return Array.isArray(records) ? records : [];
+  return Promise.all((Array.isArray(records) ? records : []).map(record => decryptVaultObject(record, key)));
+};
+
 // ==========================================
 // 2. CONTEXT & STATE MANAGEMENT
 // ==========================================
@@ -397,6 +492,8 @@ const AppProvider = ({ children }) => {
   // Estado de Autenticação
   const [isLocked, setIsLocked] = useState(PREVIEW_MODE ? false : true);
   const [masterHash, setMasterHash] = useState(PREVIEW_MODE ? 'preview-master' : (sessionStorage.getItem('pv_master_hash') || null));
+  const [vaultSalt, setVaultSalt] = useState(PREVIEW_MODE ? null : (sessionStorage.getItem('pv_vault_salt') || null));
+  const [vaultKey, setVaultKey] = useState(null);
   
   // Estado do Cofre (Agora inicializado vazio, preenchido via Postgres)
   const [categories, setCategories] = useState(
@@ -431,6 +528,38 @@ const AppProvider = ({ children }) => {
     localStorage.setItem('pv_preview_cards', JSON.stringify(cards));
   }, [cards]);
 
+  const syncVault = useCallback(async ({
+    nextCategories = categories,
+    nextPasswords = passwords,
+    nextCards = cards,
+    hash = masterHash,
+    key = vaultKey,
+    salt = vaultSalt,
+  } = {}) => {
+    if (PREVIEW_MODE || isLocked || !hash || !key) return { ok: false, skipped: true };
+
+    const encryptedPasswords = await encryptVaultArray(nextPasswords, key);
+    const encryptedCards = await encryptVaultArray(nextCards, key);
+    const res = await fetch(`${API_URL}/sync`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        hash,
+        categories: nextCategories,
+        passwords: encryptedPasswords,
+        cards: encryptedCards,
+        vaultSalt: salt,
+      })
+    });
+
+    if (!res.ok) {
+      const payload = await res.json().catch(() => ({}));
+      throw new Error(payload?.error || 'Falha ao gravar alterações.');
+    }
+
+    return { ok: true };
+  }, [categories, passwords, cards, isLocked, masterHash, vaultKey, vaultSalt]);
+
   // Aplicação da Base de Dados PostgreSQL (Auto-Sync)
   const isInitialMount = useRef(true);
   useEffect(() => {
@@ -439,15 +568,8 @@ const AppProvider = ({ children }) => {
       isInitialMount.current = false; 
       return; 
     }
-    if (isLocked || !masterHash) return;
-
-    // Sincroniza ativamente com o servidor sempre que houver mudanças
-    fetch(`${API_URL}/sync`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ hash: masterHash, categories, passwords, cards })
-    }).catch(err => console.error("Falha ao sincronizar com Postgres:", err));
-  }, [categories, passwords, cards, isLocked, masterHash]);
+    syncVault().catch(err => console.error("Falha ao sincronizar com Postgres:", err));
+  }, [categories, passwords, cards, isLocked, masterHash, vaultKey, vaultSalt, syncVault]);
 
   // Apply Theme CSS Variables
   useEffect(() => {
@@ -467,7 +589,10 @@ const AppProvider = ({ children }) => {
       timer = setTimeout(() => {
         setIsLocked(true);
         sessionStorage.removeItem('pv_master_hash');
+        sessionStorage.removeItem('pv_vault_salt');
         setMasterHash(null);
+        setVaultKey(null);
+        setVaultSalt(null);
       }, timeoutMinutes * 60000);
     };
     window.addEventListener('mousemove', resetTimer);
@@ -496,12 +621,13 @@ const AppProvider = ({ children }) => {
 
   const contextValue = {
     theme, setTheme, lang, setLang, timeoutMinutes, setTimeoutMinutes,
-    isLocked, setIsLocked, masterHash, setMasterHash,
+    isLocked, setIsLocked, masterHash, setMasterHash, vaultSalt, setVaultSalt, vaultKey, setVaultKey,
     categories, setCategories,
     passwords, setPasswords, cards, setCards,
     activeTab, setActiveTab,
     quickCreate, setQuickCreate,
     quickEdit, setQuickEdit,
+    syncVault,
     t, showToast, copyToClipboard
   };
 
@@ -689,7 +815,7 @@ const Button = ({ children, variant = 'primary', icon: Icon, className = '', dis
 };
 
 // Temporary Reveal Wrapper
-const SecretText = ({ text, mask = '••••••••' }) => {
+const SecretText = ({ text, mask = '••••••••', showCopy = true }) => {
   const [revealed, setRevealed] = useState(false);
   const { copyToClipboard } = useContext(AppContext);
 
@@ -706,9 +832,11 @@ const SecretText = ({ text, mask = '••••••••' }) => {
       <button onClick={handleReveal} className="p-1 text-[var(--text-muted)] hover:text-[var(--primary)] transition-colors">
         {revealed ? <EyeOff size={16} /> : <Eye size={16} />}
       </button>
-      <button onClick={() => copyToClipboard(text)} className="p-1 text-[var(--text-muted)] hover:text-[var(--primary)] transition-colors">
-        <Copy size={16} />
-      </button>
+      {showCopy && (
+        <button onClick={() => copyToClipboard(text)} className="p-1 text-[var(--text-muted)] hover:text-[var(--primary)] transition-colors">
+          <Copy size={16} />
+        </button>
+      )}
     </div>
   );
 };
@@ -734,7 +862,7 @@ const Modal = ({ isOpen, onClose, title, children }) => {
 // ==========================================
 
 const AuthScreen = () => {
-  const { masterHash, setMasterHash, setIsLocked, t, setPasswords, setCards, setCategories } = useContext(AppContext);
+  const { setMasterHash, setIsLocked, t, setPasswords, setCards, setCategories, vaultSalt, setVaultSalt, setVaultKey } = useContext(AppContext);
   const [pwd, setPwd] = useState('');
   const [confirmPwd, setConfirmPwd] = useState('');
   const [error, setError] = useState('');
@@ -747,16 +875,17 @@ const AuthScreen = () => {
       .then(res => res.json())
       .then(data => {
         setIsSetupState(!data.isSetup);
+        setVaultSalt(data.vaultSalt || null);
         setIsLoading(false);
       })
       .catch((err) => {
         console.error("API Error:", err);
         setError("Não foi possível conectar à API Postgres. Verifique o servidor.");
         setIsLoading(false);
-      });
+    });
   }, []);
 
-  const hash = (str) => btoa(str); 
+  const legacyHash = (str) => btoa(str);
 
   const handleSetup = async (e) => {
     e.preventDefault();
@@ -764,23 +893,26 @@ const AuthScreen = () => {
     if (pwd.length < 6) { setError('Password too short (min 6)'); return; }
     
     setIsLoading(true);
-    const h = hash(pwd);
     try {
+      const salt = generateVaultSalt();
+      const material = await deriveVaultMaterial(pwd, salt);
       const res = await fetch(`${API_URL}/setup`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ hash: h })
+        body: JSON.stringify({ hash: material.verifier, salt })
       });
       if (res.ok) {
-        setMasterHash(h);
-        sessionStorage.setItem('pv_master_hash', h);
+        setMasterHash(material.verifier);
+        setVaultSalt(salt);
+        setVaultKey(material.key);
+        sessionStorage.setItem('pv_master_hash', material.verifier);
         setIsLocked(false);
       } else {
         const err = await res.json();
         setError(err.error || "Erro de servidor");
       }
     } catch(err) {
-      setError("Falha de rede. Servidor Docker em execução?");
+      setError(err.message || "Falha de rede. Servidor Docker em execução?");
     }
     setIsLoading(false);
   };
@@ -788,8 +920,10 @@ const AuthScreen = () => {
   const handleLogin = async (e) => {
     e.preventDefault();
     setIsLoading(true);
-    const h = hash(pwd);
     try {
+      const activeSalt = vaultSalt || null;
+      const material = activeSalt ? await deriveVaultMaterial(pwd, activeSalt) : null;
+      const h = activeSalt ? material.verifier : legacyHash(pwd);
       const res = await fetch(`${API_URL}/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -798,19 +932,62 @@ const AuthScreen = () => {
       
       if (res.ok) {
         const data = await res.json();
-        setCategories(normalizeCategories(data.categories || DEFAULT_CATEGORIES));
-        setPasswords(data.passwords || []);
-        setCards(data.cards || []);
-        
-        setMasterHash(h);
-        sessionStorage.setItem('pv_master_hash', h);
-        setError('');
-        setIsLocked(false);
+        const nextCategories = normalizeCategories(data.categories || DEFAULT_CATEGORIES);
+        const nextPasswords = data.passwords || [];
+        const nextCards = data.cards || [];
+
+        if (activeSalt && material) {
+          const decryptedPasswords = await decryptVaultArray(nextPasswords, material.key);
+          const decryptedCards = await decryptVaultArray(nextCards, material.key);
+
+          setCategories(nextCategories);
+          setPasswords(decryptedPasswords);
+          setCards(decryptedCards);
+          setMasterHash(h);
+          setVaultSalt(activeSalt);
+          setVaultKey(material.key);
+          sessionStorage.setItem('pv_master_hash', h);
+          setError('');
+          setIsLocked(false);
+        } else {
+          const migrationSalt = generateVaultSalt();
+          const migrationMaterial = await deriveVaultMaterial(pwd, migrationSalt);
+          const encryptedPasswords = await encryptVaultArray(nextPasswords, migrationMaterial.key);
+          const encryptedCards = await encryptVaultArray(nextCards, migrationMaterial.key);
+
+          const migrateRes = await fetch(`${API_URL}/migrate`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              oldHash: h,
+              newHash: migrationMaterial.verifier,
+              salt: migrationSalt,
+              categories: nextCategories,
+              passwords: encryptedPasswords,
+              cards: encryptedCards,
+            })
+          });
+
+          if (!migrateRes.ok) {
+            const err = await migrateRes.json().catch(() => ({}));
+            throw new Error(err.error || 'Falha ao migrar o cofre para o modo encriptado.');
+          }
+
+          setCategories(nextCategories);
+          setPasswords(nextPasswords);
+          setCards(nextCards);
+          setMasterHash(migrationMaterial.verifier);
+          setVaultSalt(migrationSalt);
+          setVaultKey(migrationMaterial.key);
+          sessionStorage.setItem('pv_master_hash', migrationMaterial.verifier);
+          setError('');
+          setIsLocked(false);
+        }
       } else {
         setError(t('invalidPassword'));
       }
     } catch(err) {
-      setError("Falha de rede. Servidor Docker em execução?");
+      setError(err.message || "Falha de rede. Servidor Docker em execução?");
     }
     setIsLoading(false);
   };
@@ -942,9 +1119,10 @@ const Dashboard = () => {
 };
 
 const PasswordManager = () => {
-  const { passwords, setPasswords, cards, categories, setCategories, masterHash, isLocked, t, copyToClipboard, showToast } = useContext(AppContext);
+  const { passwords, setPasswords, cards, categories, setCategories, syncVault, t, copyToClipboard, showToast } = useContext(AppContext);
   const [search, setSearch] = useState('');
   const [selectedCategory, setSelectedCategory] = useState(null);
+  const [expandedItemId, setExpandedItemId] = useState(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingItem, setEditingItem] = useState(null);
 
@@ -975,6 +1153,10 @@ const PasswordManager = () => {
     });
   }, [passwords, search, selectedCategory]);
 
+  useEffect(() => {
+    setExpandedItemId(null);
+  }, [selectedCategory]);
+
   const handleOpenModal = (item = null) => {
     if (item) {
       setEditingItem(item);
@@ -987,20 +1169,7 @@ const PasswordManager = () => {
   };
 
   const persistVault = async (nextCategories, nextPasswords) => {
-    if (!masterHash || isLocked) return { ok: false, skipped: true };
-
-    const res = await fetch(`${API_URL}/sync`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ hash: masterHash, categories: nextCategories, passwords: nextPasswords, cards })
-    });
-
-    if (!res.ok) {
-      const payload = await res.json().catch(() => ({}));
-      throw new Error(payload?.error || 'Falha ao gravar alterações.');
-    }
-
-    return { ok: true };
+    return syncVault({ nextCategories, nextPasswords, nextCards: cards });
   };
 
   const openNewCategory = () => {
@@ -1200,7 +1369,7 @@ const PasswordManager = () => {
               </Button>
             </div>
 
-            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+            <div className="space-y-3">
               {categories.map(cat => (
                 <div
                   key={cat.name}
@@ -1217,73 +1386,84 @@ const PasswordManager = () => {
                     }
                   }}
                   style={getCategoryStyle(cat)}
-                  className="group relative isolate w-full max-w-[210px] justify-self-center cursor-pointer overflow-hidden rounded-[22px] p-4 text-left transition-all duration-200 hover:-translate-y-1 hover:scale-[1.01]"
+                  className="group relative isolate flex w-full cursor-pointer items-center gap-4 overflow-hidden rounded-[22px] border border-white/10 px-4 py-3 text-left transition-all duration-200 hover:-translate-y-0.5 hover:border-white/20 hover:shadow-[0_16px_30px_-24px_rgba(0,0,0,0.8)]"
                 >
                   <div className="absolute inset-x-3 top-2 h-px bg-white/14"></div>
-                  <div className="absolute inset-x-4 bottom-3 h-4 rounded-full bg-black/25 blur-lg"></div>
+                  <div className="absolute inset-x-4 bottom-2 h-4 rounded-full bg-black/25 blur-lg"></div>
                   <div className="absolute -right-5 -top-5 h-20 w-20 rounded-full bg-white/8 blur-2xl"></div>
-                      {!isSystemCategory(cat.name) && (
-                        <div data-folder-actions="true" className="absolute right-2 top-2 z-10 flex gap-1">
-                          <button
-                            type="button"
-                            onMouseDown={(e) => e.stopPropagation()}
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              openEditCategory(cat);
-                            }}
-                            className="rounded-full border border-white/10 bg-black/15 p-1.5 text-white/80 backdrop-blur hover:text-white"
-                            aria-label={`Editar ${cat.name}`}
-                          >
-                            <Edit size={12} />
-                          </button>
-                          <button
-                            type="button"
-                            onMouseDown={(e) => e.stopPropagation()}
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleDeleteCategory(cat.name);
-                            }}
-                            className="rounded-full border border-white/10 bg-black/15 p-1.5 text-white/80 backdrop-blur hover:text-white"
-                            aria-label={`Apagar ${cat.name}`}
-                          >
-                            <Trash size={12} />
-                          </button>
-                        </div>
+
+                  <div className="relative flex h-11 w-11 shrink-0 items-center justify-center rounded-[14px] border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.16),rgba(255,255,255,0.03))] text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.18),0_12px_20px_-16px_rgba(0,0,0,0.9)]">
+                    <Folder size={18} />
+                  </div>
+
+                  <div className="relative min-w-0 flex-1">
+                    <div className="flex items-center gap-2">
+                      <h3 className="truncate text-sm font-semibold tracking-wide text-white">{cat.name}</h3>
+                      {isSystemCategory(cat.name) && (
+                        <span className="rounded-full border border-white/10 bg-black/15 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.22em] text-white/70">
+                          Sistema
+                        </span>
                       )}
-                  <div className="relative flex items-start justify-between gap-3">
-                    <div>
-                      <div className="flex h-11 w-11 items-center justify-center rounded-[14px] border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.16),rgba(255,255,255,0.03))] text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.18),0_12px_20px_-16px_rgba(0,0,0,0.9)]">
-                        <Folder size={18} />
-                      </div>
-                      <h3 className="mt-3 text-sm font-semibold tracking-wide text-white">{cat.name}</h3>
-                      <p className="mt-1 text-xs text-white/75">
-                        {getCatCount(cat.name)} {t('items')}
-                      </p>
                     </div>
-                    <ChevronRight size={15} className="mt-0.5 text-white/70 transition-transform group-hover:translate-x-1" />
+                    <p className="mt-1 text-xs text-white/75">
+                      {getCatCount(cat.name)} {t('items')}
+                    </p>
+                  </div>
+
+                  <div className="relative flex items-center gap-1.5">
+                    {!isSystemCategory(cat.name) && (
+                      <div data-folder-actions="true" className="mr-1 flex gap-1.5">
+                        <button
+                          type="button"
+                          onMouseDown={(e) => e.stopPropagation()}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            openEditCategory(cat);
+                          }}
+                          className="rounded-full border border-white/10 bg-black/15 p-2 text-white/80 backdrop-blur transition-colors hover:text-white"
+                          aria-label={`Editar ${cat.name}`}
+                        >
+                          <Edit size={13} />
+                        </button>
+                        <button
+                          type="button"
+                          onMouseDown={(e) => e.stopPropagation()}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleDeleteCategory(cat.name);
+                          }}
+                          className="rounded-full border border-white/10 bg-black/15 p-2 text-white/80 backdrop-blur transition-colors hover:text-white"
+                          aria-label={`Apagar ${cat.name}`}
+                        >
+                          <Trash size={13} />
+                        </button>
+                      </div>
+                    )}
+                    <ChevronRight size={15} className="text-white/70 transition-transform group-hover:translate-x-1" />
                   </div>
                 </div>
               ))}
 
-                <button
-                  type="button"
-                  onClick={openNewCategory}
-                  className="group relative isolate w-full max-w-[210px] justify-self-center overflow-hidden rounded-[22px] p-4 text-left transition-all duration-200 hover:-translate-y-1 hover:scale-[1.01]"
-                  style={getCategoryStyle({ name: 'New', order: categories.length + 99 })}
+              <button
+                type="button"
+                onClick={openNewCategory}
+                className="group relative isolate flex w-full items-center gap-4 overflow-hidden rounded-[22px] border border-dashed border-white/18 px-4 py-3 text-left transition-all duration-200 hover:-translate-y-0.5 hover:border-white/28 hover:shadow-[0_16px_30px_-24px_rgba(0,0,0,0.8)]"
+                style={getCategoryStyle({ name: 'New', order: categories.length + 99 })}
               >
                 <div className="absolute inset-x-3 top-2 h-px bg-white/14"></div>
-                <div className="absolute inset-x-4 bottom-3 h-4 rounded-full bg-black/22 blur-lg"></div>
+                <div className="absolute inset-x-4 bottom-2 h-4 rounded-full bg-black/22 blur-lg"></div>
                 <div className="absolute -right-5 -top-5 h-20 w-20 rounded-full bg-white/8 blur-2xl"></div>
-                <div className="relative flex items-start justify-between gap-3">
-                  <div>
-                    <div className="flex h-11 w-11 items-center justify-center rounded-[14px] border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.16),rgba(255,255,255,0.03))] text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.18),0_12px_20px_-16px_rgba(0,0,0,0.9)]">
-                      <FolderPlus size={18} />
-                    </div>
-                    <h3 className="mt-3 text-sm font-semibold tracking-wide text-white">{t('newCategory')}</h3>
-                    <p className="mt-1 text-xs text-white/75">Cria uma nova pasta</p>
-                  </div>
-                  <Plus size={14} className="mt-0.5 text-white/80 transition-transform group-hover:rotate-90" />
+
+                <div className="relative flex h-11 w-11 shrink-0 items-center justify-center rounded-[14px] border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.16),rgba(255,255,255,0.03))] text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.18),0_12px_20px_-16px_rgba(0,0,0,0.9)]">
+                  <FolderPlus size={18} />
                 </div>
+
+                <div className="relative min-w-0 flex-1">
+                  <h3 className="truncate text-sm font-semibold tracking-wide text-white">{t('newCategory')}</h3>
+                  <p className="mt-1 text-xs text-white/75">Cria uma nova pasta</p>
+                </div>
+
+                <Plus size={14} className="relative text-white/80 transition-transform group-hover:rotate-90" />
               </button>
             </div>
           </div>
@@ -1337,37 +1517,53 @@ const PasswordManager = () => {
                   <span className="text-sm">{selectedCategory}</span>
                 </div>
               ) : (
-                <div className="grid gap-4 xl:grid-cols-2">
+                <div className="space-y-3">
                   {filtered.map(item => (
                     <div
                       key={item.id}
-                      className="group relative overflow-hidden rounded-[24px] border border-[var(--border)] bg-[linear-gradient(180deg,rgba(255,255,255,0.04),rgba(255,255,255,0.015))] p-3.5 transition-all duration-200 hover:-translate-y-1 hover:border-[var(--primary)]/50 hover:shadow-[0_16px_36px_-28px_rgba(0,0,0,0.8)]"
+                      className="group relative overflow-hidden rounded-[22px] border border-[var(--border)] bg-[linear-gradient(180deg,rgba(255,255,255,0.04),rgba(255,255,255,0.015))] transition-all duration-200 hover:-translate-y-0.5 hover:border-[var(--primary)]/50 hover:shadow-[0_16px_36px_-28px_rgba(0,0,0,0.8)]"
                     >
                       <div className={`absolute inset-x-0 top-0 h-1 bg-gradient-to-r ${item.favorite ? 'from-yellow-400 via-orange-400 to-rose-500' : 'from-[var(--primary)] via-cyan-400 to-emerald-400'}`}></div>
                       <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(255,255,255,0.08),transparent_28%)] pointer-events-none"></div>
 
-                      <div className="relative flex items-start gap-3.5">
-                        <div className="flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-[18px] border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.12),rgba(255,255,255,0.03))] shadow-[inset_0_1px_0_rgba(255,255,255,0.16),0_12px_20px_-16px_rgba(0,0,0,0.85)]">
+                      <button
+                        type="button"
+                        onClick={() => setExpandedItemId(expandedItemId === item.id ? null : item.id)}
+                        className="relative flex w-full items-center gap-3.5 px-3.5 py-3 text-left"
+                      >
+                        <div className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden">
                           <img
                             src={getFavicon(item.url)}
                             alt=""
                             className="h-7 w-7 object-contain"
                             onError={(e) => { e.target.style.display='none'; e.target.nextSibling.style.display='flex'; }}
                           />
-                          <div className="hidden h-12 w-12 items-center justify-center text-base font-black text-white/90">
+                          <div className="hidden h-10 w-10 items-center justify-center text-sm font-black text-white/90">
                             {item.title.charAt(0)}
                           </div>
                         </div>
 
                         <div className="min-w-0 flex-1">
-                          <div className="flex flex-wrap items-center gap-2">
+                          <div className="flex items-center gap-2">
                             <h3 className="truncate text-sm font-semibold text-[var(--text)]">
                               {item.title}
                             </h3>
                             {item.favorite && <Star size={14} className="fill-current text-yellow-500" />}
                           </div>
+                          <p className="mt-1 truncate text-xs text-[var(--text-muted)]">
+                            {item.username || '—'}
+                          </p>
+                        </div>
 
-                          <div className="mt-3.5 space-y-2.5">
+                        <ChevronDown
+                          size={15}
+                          className={`shrink-0 text-[var(--text-muted)] transition-transform duration-200 ${expandedItemId === item.id ? 'rotate-180' : ''}`}
+                        />
+                      </button>
+
+                      {expandedItemId === item.id && (
+                        <div className="relative border-t border-white/8 px-3.5 pb-3.5 pt-0.5">
+                          <div className="grid gap-2.5 pt-3">
                             <div className="flex items-center gap-2.5 rounded-[16px] border border-white/10 bg-black/12 px-3.5 py-2.5">
                               <div className="min-w-0 flex-1">
                                 <p className="text-[10px] font-semibold uppercase tracking-[0.24em] text-[var(--text-muted)]">Utilizador</p>
@@ -1390,7 +1586,7 @@ const PasswordManager = () => {
                               <div className="min-w-0 flex-1">
                                 <p className="text-[10px] font-semibold uppercase tracking-[0.24em] text-[var(--text-muted)]">Password</p>
                                 <div className="mt-0.5 text-xs font-medium text-[var(--text)]">
-                                  <SecretText text={item.password} />
+                                  <SecretText text={item.password} showCopy={false} />
                                 </div>
                               </div>
                               <button
@@ -1405,6 +1601,33 @@ const PasswordManager = () => {
                                 <Key size={14} />
                               </button>
                             </div>
+
+                            {item.url && (
+                              <div className="flex items-center gap-2.5 rounded-[16px] border border-white/10 bg-black/12 px-3.5 py-2.5">
+                                <div className="min-w-0 flex-1">
+                                  <p className="text-[10px] font-semibold uppercase tracking-[0.24em] text-[var(--text-muted)]">URL</p>
+                                  <p className="mt-0.5 truncate text-xs font-medium text-[var(--text)]">{item.url}</p>
+                                </div>
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    copyToClipboard(item.url);
+                                  }}
+                                  className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-[var(--border)] bg-[var(--surface)] text-[var(--text-muted)] transition-all hover:-translate-y-0.5 hover:border-[var(--primary)] hover:text-[var(--primary)]"
+                                  title="Copiar URL"
+                                >
+                                  <Globe size={14} />
+                                </button>
+                              </div>
+                            )}
+
+                            {item.notes && (
+                              <div className="rounded-[16px] border border-white/10 bg-black/12 px-3.5 py-2.5">
+                                <p className="text-[10px] font-semibold uppercase tracking-[0.24em] text-[var(--text-muted)]">Notas</p>
+                                <p className="mt-1 text-xs text-[var(--text)]">{item.notes}</p>
+                              </div>
+                            )}
 
                             <div className="flex items-center justify-center gap-2 pt-0.5">
                               <button
@@ -1434,7 +1657,7 @@ const PasswordManager = () => {
                             </div>
                           </div>
                         </div>
-                      </div>
+                      )}
                     </div>
                   ))}
                 </div>
@@ -2072,7 +2295,7 @@ const PasswordGenerator = () => {
 };
 
 const SettingsScreen = () => {
-  const { theme, setTheme, lang, setLang, timeoutMinutes, setTimeoutMinutes, t, setIsLocked, setMasterHash } = useContext(AppContext);
+  const { theme, setTheme, lang, setLang, timeoutMinutes, setTimeoutMinutes, t, setIsLocked, setMasterHash, setVaultKey, setVaultSalt } = useContext(AppContext);
 
   return (
     <div className="space-y-8 animate-in fade-in max-w-2xl mx-auto pb-20">
@@ -2116,7 +2339,10 @@ const SettingsScreen = () => {
         <Button variant="danger" icon={LogOut} className="w-full py-3" onClick={() => {
           setIsLocked(true);
           setMasterHash(null);
+          setVaultKey(null);
+          setVaultSalt(null);
           sessionStorage.removeItem('pv_master_hash');
+          sessionStorage.removeItem('pv_vault_salt');
         }}>{t('logout')}</Button>
       </div>
     </div>
@@ -2128,7 +2354,7 @@ const SettingsScreen = () => {
 // ==========================================
 
 const MainLayout = () => {
-  const { activeTab, setActiveTab, t, setIsLocked, setMasterHash } = useContext(AppContext);
+  const { activeTab, setActiveTab, t, setIsLocked, setMasterHash, setVaultKey, setVaultSalt } = useContext(AppContext);
 
   const navItems = [
     { id: 'dashboard', icon: LayoutDashboard, label: t('dashboard') },
@@ -2141,7 +2367,10 @@ const MainLayout = () => {
   const handleLock = () => {
     setIsLocked(true);
     setMasterHash(null);
+    setVaultKey(null);
+    setVaultSalt(null);
     sessionStorage.removeItem('pv_master_hash');
+    sessionStorage.removeItem('pv_vault_salt');
   };
 
   return (

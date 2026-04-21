@@ -2,6 +2,9 @@
 
 PassVault is a password vault with PostgreSQL persistence, a React/Vite frontend, and an Express backend.
 
+Sensitive vault data is encrypted in the browser before it is synced to PostgreSQL. The server stores ciphertext, while the decryption key is derived from the master password after unlock.
+Existing legacy vaults are upgraded automatically the first time you unlock them after this change.
+
 ## Local development
 
 Install dependencies:
@@ -56,6 +59,8 @@ DATABASE_URL=postgres://passvault_user:passvault_secret@postgres:5432/passvault
 GEMINI_API_KEY=your-gemini-api-key
 PORT=3001
 ```
+
+Vault encryption is handled automatically by the frontend and does not need extra environment variables.
 
 Recommended compose file:
 
