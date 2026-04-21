@@ -152,6 +152,11 @@ function buildCredentialDescriptor(cred) {
     };
 }
 
+function getCredentialCounter(credential) {
+    const counter = Number(credential?.counter);
+    return Number.isFinite(counter) && counter >= 0 ? counter : 0;
+}
+
 function verifyMasterHash(vault, hash) {
     if (!vault || vault.master_hash !== hash) {
         const err = new Error('Não autorizado.');
@@ -354,7 +359,7 @@ app.post('/api/passkeys/register/verify', async (req, res) => {
         credentials.push({
             id: credential.id,
             publicKey: toBase64Url(credential.publicKey),
-            counter,
+            counter: getCredentialCounter({ counter }),
             label: pendingWebAuthn.registration.label,
             prfSalt: pendingWebAuthn.registration.prfSalt,
             wrappedVaultKey: null,
@@ -417,20 +422,21 @@ app.post('/api/passkeys/finish/verify', async (req, res) => {
             return res.status(400).json({ error: 'Nenhuma finalização biométrica pendente.' });
         }
 
+        const storedCredential = getCredentials(vault).find((cred) => cred.id === pendingWebAuthn.finalize.credentialId);
+        if (!storedCredential) {
+            return res.status(404).json({ error: 'Credencial biométrica não encontrada.' });
+        }
+
         const verification = await verifyAuthenticationResponse({
             response,
             expectedChallenge: pendingWebAuthn.finalize.challenge,
             expectedOrigin: currentOrigin(req),
             expectedRPID: WEBAUTHN_RP_ID,
-            authenticator: (() => {
-                const credential = getCredentials(vault).find((cred) => cred.id === pendingWebAuthn.finalize.credentialId);
-                if (!credential) return null;
-                return {
-                    credentialID: fromBase64Url(credential.id),
-                    credentialPublicKey: fromBase64Url(credential.publicKey),
-                    counter: credential.counter || 0,
-                };
-            })(),
+            authenticator: {
+                credentialID: fromBase64Url(storedCredential.id),
+                credentialPublicKey: fromBase64Url(storedCredential.publicKey),
+                counter: getCredentialCounter(storedCredential),
+            },
         });
 
         if (!verification.verified || !verification.authenticationInfo) {
@@ -522,7 +528,7 @@ app.post('/api/passkeys/login/verify', async (req, res) => {
             authenticator: {
                 credentialID: fromBase64Url(credential.id),
                 credentialPublicKey: fromBase64Url(credential.publicKey),
-                counter: credential.counter || 0,
+                counter: getCredentialCounter(credential),
             },
         });
 
