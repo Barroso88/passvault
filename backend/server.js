@@ -333,14 +333,14 @@ app.post('/api/passkeys/register/verify', async (req, res) => {
             return res.status(400).json({ error: 'Falha ao verificar a biometria.' });
         }
 
-        const { credentialID, credentialPublicKey, counter, credentialDeviceType, credentialBackedUp } = verification.registrationInfo;
-        if (!credentialID || !credentialPublicKey) {
+        const { credential, counter, credentialDeviceType, credentialBackedUp } = verification.registrationInfo;
+        if (!credential?.id || !credential?.publicKey) {
             return res.status(500).json({ error: 'A credencial biométrica não devolveu chave pública.' });
         }
-        const credentials = getCredentials(vault).filter((cred) => cred.id !== toBase64Url(credentialID));
+        const credentials = getCredentials(vault).filter((cred) => cred.id !== credential.id);
         credentials.push({
-            id: toBase64Url(credentialID),
-            publicKey: toBase64Url(credentialPublicKey),
+            id: credential.id,
+            publicKey: toBase64Url(credential.publicKey),
             counter,
             label: pendingWebAuthn.registration.label,
             prfSalt: pendingWebAuthn.registration.prfSalt,
@@ -356,7 +356,7 @@ app.post('/api/passkeys/register/verify', async (req, res) => {
             [JSON.stringify(credentials), USER_ID]
         );
 
-        const created = credentials.find((cred) => cred.id === toBase64Url(credentialID));
+        const created = credentials.find((cred) => cred.id === credential.id);
         pendingWebAuthn.registration = null;
         res.json({ success: true, credential: created });
     } catch (err) {
