@@ -986,6 +986,23 @@ const PasswordManager = () => {
     setIsModalOpen(true);
   };
 
+  const persistVault = async (nextCategories, nextPasswords) => {
+    if (!masterHash || isLocked) return { ok: false, skipped: true };
+
+    const res = await fetch(`${API_URL}/sync`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ hash: masterHash, categories: nextCategories, passwords: nextPasswords, cards })
+    });
+
+    if (!res.ok) {
+      const payload = await res.json().catch(() => ({}));
+      throw new Error(payload?.error || 'Falha ao gravar alterações.');
+    }
+
+    return { ok: true };
+  };
+
   const openNewCategory = () => {
     setEditingCategory(null);
     setNewCatName('');
@@ -1080,10 +1097,21 @@ const PasswordManager = () => {
       if (selectedCategory === editingCategory.name) {
         setSelectedCategory(trimmed);
       }
+      const nextCategories = categories.map(cat => cat.name === editingCategory.name ? { ...cat, name: trimmed } : cat);
+      const nextPasswords = passwords.map(p => p.category === editingCategory.name ? { ...p, category: trimmed } : p);
+      persistVault(nextCategories, nextPasswords).catch(error => {
+        showToast('Não foi possível gravar a alteração da pasta.');
+        console.error(error);
+      });
     } else if (!categories.some(cat => cat.name.toLowerCase() === trimmed.toLowerCase())) {
       const nextOrder = Math.max(-1, ...categories.map(cat => Number(cat.order) || 0)) + 1;
-      setCategories(prev => [...prev, { name: trimmed, order: nextOrder }]);
+      const nextCategories = [...categories, { name: trimmed, order: nextOrder }];
+      setCategories(nextCategories);
       setSelectedCategory(trimmed);
+      persistVault(nextCategories, passwords).catch(error => {
+        showToast('Não foi possível gravar a nova pasta.');
+        console.error(error);
+      });
     }
     setIsCatModalOpen(false);
     setNewCatName('');
@@ -1112,16 +1140,8 @@ const PasswordManager = () => {
       setSearch('');
     }
 
-    if (!masterHash || isLocked) return;
     try {
-      const res = await fetch(`${API_URL}/sync`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ hash: masterHash, categories: nextCategories, passwords: nextPasswords, cards })
-      });
-      if (!res.ok) {
-        throw new Error((await res.json().catch(() => ({})))?.error || 'Falha ao gravar alterações.');
-      }
+      await persistVault(nextCategories, nextPasswords);
       showToast(`Pasta "${categoryName}" apagada.`);
     } catch (error) {
       setPasswords(passwords);
