@@ -67,6 +67,11 @@ What it does:
 - keeps Postgres data in a persistent volume
 - exposes the app on port `3071` on the host, mapped to `3001` inside the container
 
+Optional icon for Unraid:
+
+- `/container-icon.png`
+- use it as the container icon URL if your Unraid template allows a custom icon URL/path
+
 ## Files of interest
 
 - [`backend/server.js`](./backend/server.js)
