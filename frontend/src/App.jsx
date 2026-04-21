@@ -345,8 +345,8 @@ const AppProvider = ({ children }) => {
 
 const callGemini = async (prompt, schema) => {
   const apiKey = "AIzaSyDvuU7yOxgU8MzTw_kXcnQ31VmZsit63DY"; // Canvas environment API key, mas pode colocar a sua aqui no seu código local
-  const url = `https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
-
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent?key=${apiKey}`;
+  
   const payload = {
     contents: [{ parts: [{ text: prompt }] }],
     generationConfig: {
