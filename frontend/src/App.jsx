@@ -323,7 +323,7 @@ const getCategoryStyle = (category) => {
 };
 
 const getCategoryName = (category) => (typeof category === 'string' ? category : category?.name || '');
-const isSystemCategory = (name) => false;
+const isSystemCategory = (name) => name === 'Other';
 const PREVIEW_PASSWORDS = [
   {
     id: 'demo-1',
@@ -1119,6 +1119,10 @@ const PasswordManager = () => {
   };
 
   const handleDeleteCategory = async (categoryName) => {
+    if (isSystemCategory(categoryName)) {
+      showToast('A pasta Other é de sistema e não pode ser apagada.');
+      return;
+    }
     if (categories.length <= 1) {
       showToast('Precisas de manter pelo menos uma pasta.');
       return;
@@ -1218,32 +1222,34 @@ const PasswordManager = () => {
                   <div className="absolute inset-x-3 top-2 h-px bg-white/14"></div>
                   <div className="absolute inset-x-4 bottom-3 h-4 rounded-full bg-black/25 blur-lg"></div>
                   <div className="absolute -right-5 -top-5 h-20 w-20 rounded-full bg-white/8 blur-2xl"></div>
-                  <div data-folder-actions="true" className="absolute right-2 top-2 z-10 flex gap-1">
-                    <button
-                      type="button"
-                      onMouseDown={(e) => e.stopPropagation()}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        openEditCategory(cat);
-                      }}
-                      className="rounded-full border border-white/10 bg-black/15 p-1.5 text-white/80 backdrop-blur hover:text-white"
-                      aria-label={`Editar ${cat.name}`}
-                    >
-                      <Edit size={12} />
-                    </button>
-                    <button
-                      type="button"
-                      onMouseDown={(e) => e.stopPropagation()}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleDeleteCategory(cat.name);
-                      }}
-                      className="rounded-full border border-white/10 bg-black/15 p-1.5 text-white/80 backdrop-blur hover:text-white"
-                      aria-label={`Apagar ${cat.name}`}
-                    >
-                      <Trash size={12} />
-                    </button>
-                  </div>
+                      {!isSystemCategory(cat.name) && (
+                        <div data-folder-actions="true" className="absolute right-2 top-2 z-10 flex gap-1">
+                          <button
+                            type="button"
+                            onMouseDown={(e) => e.stopPropagation()}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              openEditCategory(cat);
+                            }}
+                            className="rounded-full border border-white/10 bg-black/15 p-1.5 text-white/80 backdrop-blur hover:text-white"
+                            aria-label={`Editar ${cat.name}`}
+                          >
+                            <Edit size={12} />
+                          </button>
+                          <button
+                            type="button"
+                            onMouseDown={(e) => e.stopPropagation()}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleDeleteCategory(cat.name);
+                            }}
+                            className="rounded-full border border-white/10 bg-black/15 p-1.5 text-white/80 backdrop-blur hover:text-white"
+                            aria-label={`Apagar ${cat.name}`}
+                          >
+                            <Trash size={12} />
+                          </button>
+                        </div>
+                      )}
                   <div className="relative flex items-start justify-between gap-3">
                     <div>
                       <div className="flex h-11 w-11 items-center justify-center rounded-[14px] border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.16),rgba(255,255,255,0.03))] text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.18),0_12px_20px_-16px_rgba(0,0,0,0.9)]">
