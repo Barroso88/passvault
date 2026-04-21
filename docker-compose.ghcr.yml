@@ -26,7 +26,7 @@ services:
       DATABASE_URL: postgres://passvault_user:passvault_secret@postgres:5432/passvault
       PORT: 3001
     ports:
-      - "3001:3001"
+      - "3071:3001"
     depends_on:
       - postgres
     restart: unless-stopped

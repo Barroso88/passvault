@@ -942,7 +942,7 @@ const Dashboard = () => {
 };
 
 const PasswordManager = () => {
-  const { passwords, setPasswords, categories, setCategories, t, copyToClipboard, showToast } = useContext(AppContext);
+  const { passwords, setPasswords, cards, categories, setCategories, masterHash, isLocked, t, copyToClipboard, showToast } = useContext(AppContext);
   const [search, setSearch] = useState('');
   const [selectedCategory, setSelectedCategory] = useState(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -1090,7 +1090,7 @@ const PasswordManager = () => {
     setEditingCategory(null);
   };
 
-  const handleDeleteCategory = (categoryName) => {
+  const handleDeleteCategory = async (categoryName) => {
     if (categories.length <= 1) {
       showToast('Precisas de manter pelo menos uma pasta.');
       return;
@@ -1102,11 +1102,35 @@ const PasswordManager = () => {
     }
     if (!window.confirm(`Apagar a pasta "${categoryName}"? As passwords serão movidas para "${fallbackCategory}".`)) return;
 
-    setPasswords(prev => prev.map(p => p.category === categoryName ? { ...p, category: fallbackCategory } : p));
-    setCategories(prev => prev.filter(cat => cat.name !== categoryName));
+    const nextPasswords = passwords.map(p => p.category === categoryName ? { ...p, category: fallbackCategory } : p);
+    const nextCategories = categories.filter(cat => cat.name !== categoryName);
+
+    setPasswords(nextPasswords);
+    setCategories(nextCategories);
     if (selectedCategory === categoryName) {
       setSelectedCategory(fallbackCategory);
       setSearch('');
+    }
+
+    if (!masterHash || isLocked) return;
+    try {
+      const res = await fetch(`${API_URL}/sync`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ hash: masterHash, categories: nextCategories, passwords: nextPasswords, cards })
+      });
+      if (!res.ok) {
+        throw new Error((await res.json().catch(() => ({})))?.error || 'Falha ao gravar alterações.');
+      }
+      showToast(`Pasta "${categoryName}" apagada.`);
+    } catch (error) {
+      setPasswords(passwords);
+      setCategories(categories);
+      if (selectedCategory === categoryName) {
+        setSelectedCategory(categoryName);
+      }
+      showToast('Não foi possível gravar a alteração da pasta.');
+      console.error(error);
     }
   };
 

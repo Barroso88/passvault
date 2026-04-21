@@ -65,7 +65,7 @@ What it does:
 - pulls `ghcr.io/barroso88/passvault:latest`
 - starts PostgreSQL in a separate container
 - keeps Postgres data in a persistent volume
-- exposes the app on port `3001`
+- exposes the app on port `3071` on the host, mapped to `3001` inside the container
 
 ## Files of interest
 
@@ -75,4 +75,3 @@ What it does:
 - [`.github/workflows/publish-ghcr.yml`](./.github/workflows/publish-ghcr.yml)
 - [`docker-compose.yml`](./docker-compose.yml)
 - [`docker-compose.ghcr.yml`](./docker-compose.ghcr.yml)
-
