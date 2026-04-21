@@ -129,6 +129,9 @@ function generatePrfSalt() {
 }
 
 function buildCredentialDescriptor(cred) {
+    if (!cred?.id) {
+        throw new Error('Credencial biométrica inválida.');
+    }
     return {
         id: fromBase64Url(cred.id),
         type: 'public-key',
@@ -331,6 +334,9 @@ app.post('/api/passkeys/register/verify', async (req, res) => {
         }
 
         const { credentialID, credentialPublicKey, counter, credentialDeviceType, credentialBackedUp } = verification.registrationInfo;
+        if (!credentialID || !credentialPublicKey) {
+            return res.status(500).json({ error: 'A credencial biométrica não devolveu chave pública.' });
+        }
         const credentials = getCredentials(vault).filter((cred) => cred.id !== toBase64Url(credentialID));
         credentials.push({
             id: toBase64Url(credentialID),
@@ -367,6 +373,9 @@ app.post('/api/passkeys/finish/options', async (req, res) => {
         const credential = getCredentials(vault).find((cred) => cred.id === credentialId);
         if (!credential) {
             return res.status(404).json({ error: 'Credencial biométrica não encontrada.' });
+        }
+        if (!credential.publicKey) {
+            return res.status(500).json({ error: 'A credencial biométrica está incompleta.' });
         }
 
         const options = await generateAuthenticationOptions({
@@ -487,6 +496,9 @@ app.post('/api/passkeys/login/verify', async (req, res) => {
         const credential = credentials.find((cred) => cred.id === selectedId);
         if (!credential) {
             return res.status(404).json({ error: 'Credencial biométrica não encontrada.' });
+        }
+        if (!credential.publicKey) {
+            return res.status(500).json({ error: 'A credencial biométrica está incompleta.' });
         }
 
         const verification = await verifyAuthenticationResponse({
