@@ -20,6 +20,8 @@ Create a root `.env` file:
 DATABASE_URL=postgres://passvault_user:passvault_secret@localhost:5432/passvault
 GEMINI_API_KEY=your-gemini-api-key
 PORT=3001
+WEBAUTHN_RP_ID=localhost
+WEBAUTHN_ORIGIN=http://localhost:5173
 ```
 
 Run the local stack:
@@ -58,9 +60,12 @@ Recommended environment values:
 DATABASE_URL=postgres://passvault_user:passvault_secret@postgres:5432/passvault
 GEMINI_API_KEY=your-gemini-api-key
 PORT=3001
+WEBAUTHN_RP_ID=passvault.barrosoportal.com
+WEBAUTHN_ORIGIN=https://passvault.barrosoportal.com
 ```
 
 Vault encryption is handled automatically by the frontend and does not need extra environment variables.
+Passkeys/biometrics require a secure origin, so when you use the Cloudflare Tunnel domain set `WEBAUTHN_RP_ID` and `WEBAUTHN_ORIGIN` to that public HTTPS hostname.
 
 Recommended compose file:
 

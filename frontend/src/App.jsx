@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useContext, createContext, useMemo, useRef, useCallback } from 'react';
+import { startRegistration, startAuthentication, base64URLStringToBuffer } from '@simplewebauthn/browser';
 import { 
   Lock, Unlock, Shield, Key, CreditCard, LayoutDashboard, Settings, Plus, 
   Search, Eye, EyeOff, Copy, Trash, Edit, Check, Star, AlertTriangle, 
@@ -92,6 +93,12 @@ const TRANSLATIONS = {
     timeout: 'Bloqueio Automático (Minutos)',
     never: 'Nunca',
     logout: 'Bloquear Agora',
+    changeMasterPassword: 'Alterar Palavra-passe Mestra',
+    currentMasterPassword: 'Palavra-passe Mestra Actual',
+    newMasterPassword: 'Nova Palavra-passe Mestra',
+    confirmNewMasterPassword: 'Confirmar Nova Palavra-passe',
+    updateMasterPassword: 'Actualizar Palavra-passe',
+    masterPasswordUpdated: 'Palavra-passe mestra actualizada.',
     weak: 'Fraca',
     medium: 'Média',
     strong: 'Forte',
@@ -106,6 +113,10 @@ const TRANSLATIONS = {
     smartPassphrase: '✨ Passphrase Temática',
     themePrompt: 'Tema (ex: Espaço, Cinema)',
     generating: 'A gerar...',
+    loginWithBiometrics: 'Entrar com Biometria',
+    registerBiometrics: 'Registar Biometria',
+    disableBiometrics: 'Desligar Biometria',
+    biometricsSection: 'Biometria / Passkeys',
   },
   en: {
     welcome: 'Welcome to PassVault',
@@ -165,6 +176,12 @@ const TRANSLATIONS = {
     timeout: 'Auto-lock Timeout (Minutes)',
     never: 'Never',
     logout: 'Lock Now',
+    changeMasterPassword: 'Change Master Password',
+    currentMasterPassword: 'Current Master Password',
+    newMasterPassword: 'New Master Password',
+    confirmNewMasterPassword: 'Confirm New Password',
+    updateMasterPassword: 'Update Password',
+    masterPasswordUpdated: 'Master password updated.',
     weak: 'Weak',
     medium: 'Medium',
     strong: 'Strong',
@@ -179,6 +196,10 @@ const TRANSLATIONS = {
     smartPassphrase: '✨ Thematic Passphrase',
     themePrompt: 'Theme (e.g., Space, Movies)',
     generating: 'Generating...',
+    loginWithBiometrics: 'Sign in with Biometrics',
+    registerBiometrics: 'Register Biometrics',
+    disableBiometrics: 'Disable Biometrics',
+    biometricsSection: 'Biometrics / Passkeys',
   },
   es: {
     welcome: 'Bienvenido a PassVault',
@@ -238,6 +259,12 @@ const TRANSLATIONS = {
     timeout: 'Bloqueo Automático (Minutos)',
     never: 'Nunca',
     logout: 'Bloquear Ahora',
+    changeMasterPassword: 'Cambiar Contraseña Maestra',
+    currentMasterPassword: 'Contraseña Maestra Actual',
+    newMasterPassword: 'Nueva Contraseña Maestra',
+    confirmNewMasterPassword: 'Confirmar Nueva Contraseña',
+    updateMasterPassword: 'Actualizar Contraseña',
+    masterPasswordUpdated: 'Contraseña maestra actualizada.',
     weak: 'Débil',
     medium: 'Media',
     strong: 'Fuerte',
@@ -252,6 +279,10 @@ const TRANSLATIONS = {
     smartPassphrase: '✨ Frase de Contraseña Temática',
     themePrompt: 'Tema (ej: Espacio, Cine)',
     generating: 'Generando...',
+    loginWithBiometrics: 'Entrar con Biometría',
+    registerBiometrics: 'Registrar Biometría',
+    disableBiometrics: 'Desactivar Biometría',
+    biometricsSection: 'Biometría / Passkeys',
   }
 };
 
@@ -444,6 +475,33 @@ const deriveVaultMaterial = async (password, saltBase64) => {
   return { key, verifier, salt: saltBase64 };
 };
 
+const generateVaultKeyMaterial = async () => {
+  const raw = crypto.getRandomValues(new Uint8Array(32));
+  const rawBase64 = bytesToBase64(raw);
+  const key = await crypto.subtle.importKey(
+    'raw',
+    raw,
+    { name: 'AES-GCM' },
+    false,
+    ['encrypt', 'decrypt']
+  );
+
+  return { key, rawBase64 };
+};
+
+const importVaultKeyMaterial = async (rawBase64) => {
+  const raw = base64ToBytes(rawBase64);
+  const key = await crypto.subtle.importKey(
+    'raw',
+    raw,
+    { name: 'AES-GCM' },
+    false,
+    ['encrypt', 'decrypt']
+  );
+
+  return { key, rawBase64 };
+};
+
 const encryptVaultObject = async (value, key) => {
   const iv = crypto.getRandomValues(new Uint8Array(12));
   const encoded = textEncoder.encode(JSON.stringify(value));
@@ -478,6 +536,60 @@ const decryptVaultArray = async (records = [], key) => {
   return Promise.all((Array.isArray(records) ? records : []).map(record => decryptVaultObject(record, key)));
 };
 
+const normalizeBufferSource = (value) => {
+  if (!value) return null;
+  if (value instanceof Uint8Array) return value;
+  if (value instanceof ArrayBuffer) return new Uint8Array(value);
+  if (ArrayBuffer.isView(value)) {
+    return new Uint8Array(value.buffer, value.byteOffset, value.byteLength);
+  }
+  return null;
+};
+
+const buildPrfExtensionsForCredentials = (credentials = []) => {
+  const evalByCredential = {};
+  (Array.isArray(credentials) ? credentials : []).forEach((credential) => {
+    if (!credential?.id || !credential?.prfSalt) return;
+    evalByCredential[credential.id] = {
+      first: base64URLStringToBuffer(credential.prfSalt),
+    };
+  });
+
+  if (Object.keys(evalByCredential).length === 0) return undefined;
+
+  return {
+    prf: {
+      evalByCredential,
+    },
+  };
+};
+
+const buildPrfExtensionsForSalt = (prfSalt) => {
+  if (!prfSalt) return undefined;
+  return {
+    prf: {
+      eval: {
+        first: base64URLStringToBuffer(prfSalt),
+      },
+    },
+  };
+};
+
+const importPasskeyDerivedKey = async (prfBytes) => {
+  const bytes = normalizeBufferSource(prfBytes);
+  if (!bytes) {
+    throw new Error('Esta credencial não devolveu um PRF válido.');
+  }
+
+  return crypto.subtle.importKey(
+    'raw',
+    bytes,
+    { name: 'AES-GCM' },
+    false,
+    ['encrypt', 'decrypt']
+  );
+};
+
 // ==========================================
 // 2. CONTEXT & STATE MANAGEMENT
 // ==========================================
@@ -493,7 +605,12 @@ const AppProvider = ({ children }) => {
   const [isLocked, setIsLocked] = useState(PREVIEW_MODE ? false : true);
   const [masterHash, setMasterHash] = useState(PREVIEW_MODE ? 'preview-master' : (sessionStorage.getItem('pv_master_hash') || null));
   const [vaultSalt, setVaultSalt] = useState(PREVIEW_MODE ? null : (sessionStorage.getItem('pv_vault_salt') || null));
+  const [vaultVersion, setVaultVersion] = useState(1);
   const [vaultKey, setVaultKey] = useState(null);
+  const [vaultKeyRaw, setVaultKeyRaw] = useState(null);
+  const [vaultKeyWrapMaster, setVaultKeyWrapMaster] = useState(null);
+  const [hasPasskeys, setHasPasskeys] = useState(false);
+  const [passkeyCredentials, setPasskeyCredentials] = useState([]);
   
   // Estado do Cofre (Agora inicializado vazio, preenchido via Postgres)
   const [categories, setCategories] = useState(
@@ -532,9 +649,12 @@ const AppProvider = ({ children }) => {
     nextCategories = categories,
     nextPasswords = passwords,
     nextCards = cards,
+    nextPasskeys = passkeyCredentials,
     hash = masterHash,
     key = vaultKey,
     salt = vaultSalt,
+    nextVaultKeyWrapMaster = vaultKeyWrapMaster,
+    nextVaultVersion = vaultVersion,
   } = {}) => {
     if (PREVIEW_MODE || isLocked || !hash || !key) return { ok: false, skipped: true };
 
@@ -549,6 +669,9 @@ const AppProvider = ({ children }) => {
         passwords: encryptedPasswords,
         cards: encryptedCards,
         vaultSalt: salt,
+        vaultVersion: nextVaultVersion,
+        vaultKeyWrapMaster: nextVaultKeyWrapMaster,
+        webauthnCredentials: nextPasskeys,
       })
     });
 
@@ -558,7 +681,7 @@ const AppProvider = ({ children }) => {
     }
 
     return { ok: true };
-  }, [categories, passwords, cards, isLocked, masterHash, vaultKey, vaultSalt]);
+  }, [categories, passwords, cards, passkeyCredentials, isLocked, masterHash, vaultKey, vaultSalt, vaultVersion, vaultKeyWrapMaster]);
 
   // Aplicação da Base de Dados PostgreSQL (Auto-Sync)
   const isInitialMount = useRef(true);
@@ -592,6 +715,8 @@ const AppProvider = ({ children }) => {
         sessionStorage.removeItem('pv_vault_salt');
         setMasterHash(null);
         setVaultKey(null);
+        setVaultKeyRaw(null);
+        setVaultKeyWrapMaster(null);
         setVaultSalt(null);
       }, timeoutMinutes * 60000);
     };
@@ -621,7 +746,7 @@ const AppProvider = ({ children }) => {
 
   const contextValue = {
     theme, setTheme, lang, setLang, timeoutMinutes, setTimeoutMinutes,
-    isLocked, setIsLocked, masterHash, setMasterHash, vaultSalt, setVaultSalt, vaultKey, setVaultKey,
+    isLocked, setIsLocked, masterHash, setMasterHash, vaultSalt, setVaultSalt, vaultVersion, setVaultVersion, vaultKey, setVaultKey, vaultKeyRaw, setVaultKeyRaw, vaultKeyWrapMaster, setVaultKeyWrapMaster, hasPasskeys, setHasPasskeys, passkeyCredentials, setPasskeyCredentials,
     categories, setCategories,
     passwords, setPasswords, cards, setCards,
     activeTab, setActiveTab,
@@ -862,55 +987,124 @@ const Modal = ({ isOpen, onClose, title, children }) => {
 // ==========================================
 
 const AuthScreen = () => {
-  const { setMasterHash, setIsLocked, t, setPasswords, setCards, setCategories, vaultSalt, setVaultSalt, setVaultKey } = useContext(AppContext);
+  const {
+    setMasterHash,
+    setIsLocked,
+    t,
+    setPasswords,
+    setCards,
+    setCategories,
+    vaultSalt,
+    setVaultSalt,
+    setVaultKey,
+    setVaultKeyRaw,
+    setVaultKeyWrapMaster,
+    setVaultVersion,
+    setPasskeyCredentials,
+    setHasPasskeys,
+    hasPasskeys,
+  } = useContext(AppContext);
   const [pwd, setPwd] = useState('');
   const [confirmPwd, setConfirmPwd] = useState('');
   const [error, setError] = useState('');
   const [isSetupState, setIsSetupState] = useState(true);
   const [isLoading, setIsLoading] = useState(true);
+  const [isBiometricLoading, setIsBiometricLoading] = useState(false);
 
-  // Consulta à API Docker/Postgres em vez de localstorage
   useEffect(() => {
     fetch(`${API_URL}/status`)
       .then(res => res.json())
       .then(data => {
         setIsSetupState(!data.isSetup);
         setVaultSalt(data.vaultSalt || null);
+        setVaultVersion(data.vaultVersion || 1);
+        setHasPasskeys(!!data.hasPasskeys);
         setIsLoading(false);
       })
       .catch((err) => {
         console.error("API Error:", err);
         setError("Não foi possível conectar à API Postgres. Verifique o servidor.");
         setIsLoading(false);
-    });
-  }, []);
+      });
+  }, [setHasPasskeys, setVaultSalt, setVaultVersion]);
 
   const legacyHash = (str) => btoa(str);
+
+  const loadVaultData = async (masterHashValue, vaultKeyInstance, vaultKeyRawValue = null) => {
+    const res = await fetch(`${API_URL}/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ hash: masterHashValue })
+    });
+
+    if (!res.ok) {
+      const payload = await res.json().catch(() => ({}));
+      throw new Error(payload?.error || t('invalidPassword'));
+    }
+
+    const data = await res.json();
+    const nextCategories = normalizeCategories((Array.isArray(data.categories) && data.categories.length > 0) ? data.categories : DEFAULT_CATEGORIES);
+    const nextPasswords = await decryptVaultArray(data.passwords || [], vaultKeyInstance);
+    const nextCards = await decryptVaultArray(data.cards || [], vaultKeyInstance);
+    const nextPasskeys = data.webauthnCredentials || [];
+
+    setCategories(nextCategories);
+    setPasswords(nextPasswords);
+    setCards(nextCards);
+    setMasterHash(masterHashValue);
+    setVaultSalt(data.vaultSalt || null);
+    setVaultVersion(data.vaultVersion || 1);
+    setVaultKey(vaultKeyInstance);
+    setVaultKeyRaw(vaultKeyRawValue);
+    setVaultKeyWrapMaster(data.vaultKeyWrapMaster || null);
+    setPasskeyCredentials(nextPasskeys);
+    setHasPasskeys(nextPasskeys.some((credential) => credential.wrappedVaultKey && credential.wrappedMasterHash));
+    sessionStorage.setItem('pv_master_hash', masterHashValue);
+    if (data.vaultSalt) {
+      sessionStorage.setItem('pv_vault_salt', data.vaultSalt);
+    }
+    setError('');
+    setIsLocked(false);
+  };
 
   const handleSetup = async (e) => {
     e.preventDefault();
     if (pwd !== confirmPwd) { setError(t('passwordsMismatch')); return; }
     if (pwd.length < 6) { setError('Password too short (min 6)'); return; }
-    
+
     setIsLoading(true);
     try {
       const salt = generateVaultSalt();
       const material = await deriveVaultMaterial(pwd, salt);
+      const vaultKeyMaterial = await generateVaultKeyMaterial();
+      const vaultKeyWrapMaster = await encryptVaultObject(vaultKeyMaterial.rawBase64, material.key);
+
       const res = await fetch(`${API_URL}/setup`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ hash: material.verifier, salt })
+        body: JSON.stringify({
+          hash: material.verifier,
+          salt,
+          vaultKeyWrapMaster,
+        })
       });
-      if (res.ok) {
-        setMasterHash(material.verifier);
-        setVaultSalt(salt);
-        setVaultKey(material.key);
-        sessionStorage.setItem('pv_master_hash', material.verifier);
-        setIsLocked(false);
-      } else {
-        const err = await res.json();
-        setError(err.error || "Erro de servidor");
+
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || "Erro de servidor");
       }
+
+      setMasterHash(material.verifier);
+      setVaultSalt(salt);
+      setVaultVersion(2);
+      setVaultKey(vaultKeyMaterial.key);
+      setVaultKeyRaw(vaultKeyMaterial.rawBase64);
+      setVaultKeyWrapMaster(vaultKeyWrapMaster);
+      setPasskeyCredentials([]);
+      setHasPasskeys(false);
+      sessionStorage.setItem('pv_master_hash', material.verifier);
+      sessionStorage.setItem('pv_vault_salt', salt);
+      setIsLocked(false);
     } catch(err) {
       setError(err.message || "Falha de rede. Servidor Docker em execução?");
     }
@@ -924,72 +1118,140 @@ const AuthScreen = () => {
       const activeSalt = vaultSalt || null;
       const material = activeSalt ? await deriveVaultMaterial(pwd, activeSalt) : null;
       const h = activeSalt ? material.verifier : legacyHash(pwd);
+
       const res = await fetch(`${API_URL}/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ hash: h })
       });
-      
-      if (res.ok) {
-        const data = await res.json();
-        const nextCategories = normalizeCategories(data.categories || DEFAULT_CATEGORIES);
-        const nextPasswords = data.passwords || [];
-        const nextCards = data.cards || [];
 
-        if (activeSalt && material) {
-          const decryptedPasswords = await decryptVaultArray(nextPasswords, material.key);
-          const decryptedCards = await decryptVaultArray(nextCards, material.key);
+      if (!res.ok) {
+        const payload = await res.json().catch(() => ({}));
+        throw new Error(payload?.error || t('invalidPassword'));
+      }
 
-          setCategories(nextCategories);
-          setPasswords(decryptedPasswords);
-          setCards(decryptedCards);
-          setMasterHash(h);
-          setVaultSalt(activeSalt);
-          setVaultKey(material.key);
-          sessionStorage.setItem('pv_master_hash', h);
-          setError('');
-          setIsLocked(false);
-        } else {
-          const migrationSalt = generateVaultSalt();
-          const migrationMaterial = await deriveVaultMaterial(pwd, migrationSalt);
-          const encryptedPasswords = await encryptVaultArray(nextPasswords, migrationMaterial.key);
-          const encryptedCards = await encryptVaultArray(nextCards, migrationMaterial.key);
+      const data = await res.json();
+      const nextPasskeys = data.webauthnCredentials || [];
+      const isModernVault = Number(data.vaultVersion || 1) >= 2 && !!data.vaultKeyWrapMaster;
 
-          const migrateRes = await fetch(`${API_URL}/migrate`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              oldHash: h,
-              newHash: migrationMaterial.verifier,
-              salt: migrationSalt,
-              categories: nextCategories,
-              passwords: encryptedPasswords,
-              cards: encryptedCards,
-            })
-          });
-
-          if (!migrateRes.ok) {
-            const err = await migrateRes.json().catch(() => ({}));
-            throw new Error(err.error || 'Falha ao migrar o cofre para o modo encriptado.');
-          }
-
-          setCategories(nextCategories);
-          setPasswords(nextPasswords);
-          setCards(nextCards);
-          setMasterHash(migrationMaterial.verifier);
-          setVaultSalt(migrationSalt);
-          setVaultKey(migrationMaterial.key);
-          sessionStorage.setItem('pv_master_hash', migrationMaterial.verifier);
-          setError('');
-          setIsLocked(false);
-        }
+      if (isModernVault && material) {
+        const wrappedVaultKey = data.vaultKeyWrapMaster;
+        const decryptedVaultKeyRaw = await decryptVaultObject(wrappedVaultKey, material.key);
+        const vaultKeyMaterial = await importVaultKeyMaterial(decryptedVaultKeyRaw);
+        await loadVaultData(h, vaultKeyMaterial.key, decryptedVaultKeyRaw);
+        setVaultVersion(data.vaultVersion || 2);
+        setPasskeyCredentials(nextPasskeys);
+        setHasPasskeys(nextPasskeys.some((credential) => credential.wrappedVaultKey && credential.wrappedMasterHash));
       } else {
-        setError(t('invalidPassword'));
+        const migrationSalt = generateVaultSalt();
+        const migrationMaterial = await deriveVaultMaterial(pwd, migrationSalt);
+        const vaultKeyMaterial = await generateVaultKeyMaterial();
+        const vaultKeyWrapMaster = await encryptVaultObject(vaultKeyMaterial.rawBase64, migrationMaterial.key);
+        const encryptedPasswords = await encryptVaultArray(data.passwords || [], vaultKeyMaterial.key);
+        const encryptedCards = await encryptVaultArray(data.cards || [], vaultKeyMaterial.key);
+
+        const migrateRes = await fetch(`${API_URL}/migrate`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            oldHash: h,
+            newHash: migrationMaterial.verifier,
+            salt: migrationSalt,
+            categories: normalizeCategories((Array.isArray(data.categories) && data.categories.length > 0) ? data.categories : DEFAULT_CATEGORIES),
+            passwords: encryptedPasswords,
+            cards: encryptedCards,
+            vaultKeyWrapMaster,
+          })
+        });
+
+        if (!migrateRes.ok) {
+          const payload = await migrateRes.json().catch(() => ({}));
+          throw new Error(payload?.error || 'Falha ao migrar o cofre para o modo encriptado.');
+        }
+
+        setCategories(normalizeCategories((Array.isArray(data.categories) && data.categories.length > 0) ? data.categories : DEFAULT_CATEGORIES));
+        setPasswords(data.passwords || []);
+        setCards(data.cards || []);
+        setMasterHash(migrationMaterial.verifier);
+        setVaultSalt(migrationSalt);
+        setVaultVersion(2);
+        setVaultKey(vaultKeyMaterial.key);
+        setVaultKeyRaw(vaultKeyMaterial.rawBase64);
+        setVaultKeyWrapMaster(vaultKeyWrapMaster);
+        setPasskeyCredentials(nextPasskeys);
+        setHasPasskeys(nextPasskeys.some((credential) => credential.wrappedVaultKey && credential.wrappedMasterHash));
+        sessionStorage.setItem('pv_master_hash', migrationMaterial.verifier);
+        sessionStorage.setItem('pv_vault_salt', migrationSalt);
+        setError('');
+        setIsLocked(false);
       }
     } catch(err) {
       setError(err.message || "Falha de rede. Servidor Docker em execução?");
     }
     setIsLoading(false);
+  };
+
+  const handleBiometricLogin = async () => {
+    setIsBiometricLoading(true);
+    try {
+      const optionsRes = await fetch(`${API_URL}/passkeys/login/options`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+      });
+
+      if (!optionsRes.ok) {
+        const payload = await optionsRes.json().catch(() => ({}));
+        throw new Error(payload?.error || 'Biometria não configurada.');
+      }
+
+      const payload = await optionsRes.json();
+      const credentials = payload.credentials || [];
+      const options = {
+        ...payload.options,
+        extensions: {
+          ...(payload.options?.extensions || {}),
+          ...(buildPrfExtensionsForCredentials(credentials) || {}),
+        },
+      };
+
+      const authenticationResponse = await startAuthentication({ optionsJSON: options });
+      const credential = credentials.find((item) => item.id === authenticationResponse.id);
+      const prfSeed = authenticationResponse.clientExtensionResults?.prf?.results?.first;
+
+      if (!credential) {
+        throw new Error('A credencial biométrica não foi reconhecida.');
+      }
+      if (!prfSeed) {
+        throw new Error('Este passkey não devolveu o PRF necessário para desbloquear o cofre.');
+      }
+      if (!credential.wrappedVaultKey || !credential.wrappedMasterHash) {
+        throw new Error('Este passkey ainda não foi finalizado para desbloquear o cofre.');
+      }
+
+      const prfKey = await importPasskeyDerivedKey(prfSeed);
+      const vaultKeyRaw = await decryptVaultObject(credential.wrappedVaultKey, prfKey);
+      const vaultKeyMaterial = await importVaultKeyMaterial(vaultKeyRaw);
+      const masterHashValue = await decryptVaultObject(credential.wrappedMasterHash, vaultKeyMaterial.key);
+
+      const verifyRes = await fetch(`${API_URL}/passkeys/login/verify`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ response: authenticationResponse })
+      });
+
+      if (!verifyRes.ok) {
+        const payload = await verifyRes.json().catch(() => ({}));
+        throw new Error(payload?.error || 'Falha ao validar a biometria.');
+      }
+
+      await loadVaultData(masterHashValue, vaultKeyMaterial.key, vaultKeyRaw);
+      setPasskeyCredentials(credentials);
+      setHasPasskeys(true);
+    } catch (err) {
+      setError(err.message || 'Não foi possível iniciar o login biométrico.');
+    } finally {
+      setIsBiometricLoading(false);
+    }
   };
 
   return (
@@ -1004,23 +1266,24 @@ const AuthScreen = () => {
         </p>
 
         <form onSubmit={isSetupState ? handleSetup : handleLogin} className="space-y-4 text-left">
-          <Input 
-            label={t('masterPassword')} 
-            type="password" 
-            icon={Lock} 
-            value={pwd} 
-            onChange={e => setPwd(e.target.value)} 
-            required autoFocus
+          <Input
+            label={t('masterPassword')}
+            type="password"
+            icon={Lock}
+            value={pwd}
+            onChange={e => setPwd(e.target.value)}
+            required
+            autoFocus
             disabled={isLoading}
           />
           {isSetupState && !isLoading && (
-            <Input 
-              label={t('confirmMasterPassword')} 
-              type="password" 
-              icon={Lock} 
-              value={confirmPwd} 
-              onChange={e => setConfirmPwd(e.target.value)} 
-              required 
+            <Input
+              label={t('confirmMasterPassword')}
+              type="password"
+              icon={Lock}
+              value={confirmPwd}
+              onChange={e => setConfirmPwd(e.target.value)}
+              required
             />
           )}
           {error && <p className="text-[var(--danger)] text-sm flex items-center"><AlertTriangle size={14} className="mr-1"/> {error}</p>}
@@ -1028,6 +1291,21 @@ const AuthScreen = () => {
             {isLoading ? "A carregar..." : (isSetupState ? t('createVault') : t('unlockVault'))}
           </Button>
         </form>
+
+        {!isSetupState && hasPasskeys && (
+          <div className="mt-4">
+            <Button
+              type="button"
+              variant="secondary"
+              className="w-full py-3"
+              onClick={handleBiometricLogin}
+              disabled={isBiometricLoading || isLoading}
+              icon={isBiometricLoading ? Loader2 : Shield}
+            >
+              {isBiometricLoading ? t('generating') : t('loginWithBiometrics')}
+            </Button>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -2295,7 +2573,264 @@ const PasswordGenerator = () => {
 };
 
 const SettingsScreen = () => {
-  const { theme, setTheme, lang, setLang, timeoutMinutes, setTimeoutMinutes, t, setIsLocked, setMasterHash, setVaultKey, setVaultSalt } = useContext(AppContext);
+  const {
+    theme, setTheme,
+    lang, setLang,
+    timeoutMinutes, setTimeoutMinutes,
+    t, showToast,
+    setIsLocked, setMasterHash, setVaultKey, setVaultKeyRaw, setVaultKeyWrapMaster, setVaultSalt, setVaultVersion,
+    masterHash, vaultSalt, vaultKey, vaultKeyRaw, passwords, cards, categories,
+    passkeyCredentials, setPasskeyCredentials, hasPasskeys, setHasPasskeys, syncVault,
+  } = useContext(AppContext);
+  const [isMasterModalOpen, setIsMasterModalOpen] = useState(false);
+  const [currentMasterPwd, setCurrentMasterPwd] = useState('');
+  const [newMasterPwd, setNewMasterPwd] = useState('');
+  const [confirmNewMasterPwd, setConfirmNewMasterPwd] = useState('');
+  const [isChangingMaster, setIsChangingMaster] = useState(false);
+  const [masterChangeError, setMasterChangeError] = useState('');
+  const [isBiometricBusy, setIsBiometricBusy] = useState(false);
+  const [biometricError, setBiometricError] = useState('');
+
+  const closeMasterModal = () => {
+    setIsMasterModalOpen(false);
+    setCurrentMasterPwd('');
+    setNewMasterPwd('');
+    setConfirmNewMasterPwd('');
+    setMasterChangeError('');
+  };
+
+  const handleChangeMasterPassword = async (e) => {
+    e.preventDefault();
+
+    if (!currentMasterPwd || !newMasterPwd || !confirmNewMasterPwd) {
+      setMasterChangeError('Preenche todos os campos.');
+      return;
+    }
+
+    if (newMasterPwd.length < 6) {
+      setMasterChangeError('A nova palavra-passe tem de ter pelo menos 6 caracteres.');
+      return;
+    }
+
+    if (newMasterPwd !== confirmNewMasterPwd) {
+      setMasterChangeError('As novas palavras-passe não coincidem.');
+      return;
+    }
+
+    if (!masterHash || !vaultSalt) {
+      setMasterChangeError('Não foi possível validar o cofre actual.');
+      return;
+    }
+    if (!vaultKey || !vaultKeyRaw) {
+      setMasterChangeError('Não foi possível encontrar a chave do cofre para re-encriptar a alteração.');
+      return;
+    }
+
+    setIsChangingMaster(true);
+    setMasterChangeError('');
+
+    try {
+      const currentMaterial = await deriveVaultMaterial(currentMasterPwd, vaultSalt);
+      if (currentMaterial.verifier !== masterHash) {
+        throw new Error('Palavra-passe mestra actual inválida.');
+      }
+
+      const nextSalt = generateVaultSalt();
+      const nextMaterial = await deriveVaultMaterial(newMasterPwd, nextSalt);
+      const nextVaultKeyWrapMaster = await encryptVaultObject(vaultKeyRaw, nextMaterial.key);
+      const nextPasskeys = await Promise.all(passkeyCredentials.map(async (credential) => ({
+        ...credential,
+        wrappedMasterHash: await encryptVaultObject(nextMaterial.verifier, vaultKey),
+      })));
+
+      setMasterHash(nextMaterial.verifier);
+      setVaultSalt(nextSalt);
+      setVaultVersion(2);
+      setVaultKeyWrapMaster(nextVaultKeyWrapMaster);
+      setPasskeyCredentials(nextPasskeys);
+      setHasPasskeys(nextPasskeys.length > 0);
+      sessionStorage.setItem('pv_master_hash', nextMaterial.verifier);
+      sessionStorage.setItem('pv_vault_salt', nextSalt);
+      await syncVault({
+        nextCategories: categories,
+        nextPasswords: passwords,
+        nextCards: cards,
+        nextPasskeys,
+        hash: nextMaterial.verifier,
+        key: vaultKey,
+        salt: nextSalt,
+        nextVaultKeyWrapMaster,
+        nextVaultVersion: 2,
+      });
+      showToast(t('masterPasswordUpdated'));
+      closeMasterModal();
+    } catch (err) {
+      setMasterChangeError(err.message || 'Não foi possível actualizar a palavra-passe mestra.');
+    } finally {
+      setIsChangingMaster(false);
+    }
+  };
+
+  const handleRegisterBiometrics = async () => {
+    if (!masterHash || !vaultKey || !vaultKeyRaw) {
+      setBiometricError('Não foi possível preparar a biometria neste cofre.');
+      return;
+    }
+
+    const label = window.prompt('Nome para esta biometria', `Passkey ${navigator.platform || 'dispositivo'}`) || 'Passkey';
+    setIsBiometricBusy(true);
+    setBiometricError('');
+
+    try {
+      const optionsRes = await fetch(`${API_URL}/passkeys/register/options`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ hash: masterHash, label }),
+      });
+
+      if (!optionsRes.ok) {
+        const payload = await optionsRes.json().catch(() => ({}));
+        throw new Error(payload?.error || 'Não foi possível iniciar o registo biométrico.');
+      }
+
+      const optionsPayload = await optionsRes.json();
+      const registrationOptions = {
+        ...optionsPayload.options,
+        extensions: {
+          ...(optionsPayload.options?.extensions || {}),
+          ...(buildPrfExtensionsForSalt(optionsPayload.prfSalt) || {}),
+        },
+      };
+
+      const registrationResponse = await startRegistration({ optionsJSON: registrationOptions });
+      if (!registrationResponse.clientExtensionResults?.prf?.enabled) {
+        throw new Error('Este dispositivo não suportou PRF durante o registo biométrico.');
+      }
+      const verifyRes = await fetch(`${API_URL}/passkeys/register/verify`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ hash: masterHash, response: registrationResponse }),
+      });
+
+      if (!verifyRes.ok) {
+        const payload = await verifyRes.json().catch(() => ({}));
+        throw new Error(payload?.error || 'Falha ao verificar o registo biométrico.');
+      }
+
+      const verifyPayload = await verifyRes.json();
+      const credentialId = verifyPayload?.credential?.id;
+      if (!credentialId) {
+        throw new Error('Não foi possível obter a credencial biométrica criada.');
+      }
+
+      const finishOptionsRes = await fetch(`${API_URL}/passkeys/finish/options`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ hash: masterHash, credentialId }),
+      });
+
+      if (!finishOptionsRes.ok) {
+        const payload = await finishOptionsRes.json().catch(() => ({}));
+        throw new Error(payload?.error || 'Não foi possível finalizar a biometria.');
+      }
+
+      const finishOptionsPayload = await finishOptionsRes.json();
+      const finishOptions = {
+        ...finishOptionsPayload.options,
+        extensions: {
+          ...(finishOptionsPayload.options?.extensions || {}),
+          ...(buildPrfExtensionsForCredentials(finishOptionsPayload.credential ? [finishOptionsPayload.credential] : []) || {}),
+        },
+      };
+
+      const authenticationResponse = await startAuthentication({ optionsJSON: finishOptions });
+      const prfSeed = authenticationResponse.clientExtensionResults?.prf?.results?.first;
+      if (!prfSeed) {
+        throw new Error('Esta credencial não devolveu PRF suficiente para guardar a chave do cofre.');
+      }
+
+      const prfKey = await importPasskeyDerivedKey(prfSeed);
+      const wrappedVaultKey = await encryptVaultObject(vaultKeyRaw, prfKey);
+      const wrappedMasterHash = await encryptVaultObject(masterHash, vaultKey);
+
+      const finishVerifyRes = await fetch(`${API_URL}/passkeys/finish/verify`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          hash: masterHash,
+          response: authenticationResponse,
+          wrappedVaultKey,
+          wrappedMasterHash,
+        }),
+      });
+
+      if (!finishVerifyRes.ok) {
+        const payload = await finishVerifyRes.json().catch(() => ({}));
+        throw new Error(payload?.error || 'Falha ao guardar a biometria.');
+      }
+
+      const finishVerifyPayload = await finishVerifyRes.json().catch(() => ({}));
+      const updatedCredential = finishVerifyPayload?.credential || {
+        ...finishOptionsPayload.credential,
+        wrappedVaultKey,
+        wrappedMasterHash,
+      };
+
+      const nextPasskeys = [
+        ...passkeyCredentials.filter((credential) => credential.id !== updatedCredential.id),
+        updatedCredential,
+      ];
+
+      setPasskeyCredentials(nextPasskeys);
+      setHasPasskeys(true);
+      await syncVault({
+        nextCategories: categories,
+        nextPasswords: passwords,
+        nextCards: cards,
+        nextPasskeys,
+      });
+      showToast('Biometria registada.');
+    } catch (err) {
+      setBiometricError(err.message || 'Não foi possível registar a biometria.');
+    } finally {
+      setIsBiometricBusy(false);
+    }
+  };
+
+  const handleDisableBiometrics = async () => {
+    if (!masterHash) return;
+    if (!window.confirm('Desejas desactivar a biometria deste cofre?')) return;
+
+    setIsBiometricBusy(true);
+    setBiometricError('');
+
+    try {
+      const res = await fetch(`${API_URL}/passkeys/disable`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ hash: masterHash }),
+      });
+
+      if (!res.ok) {
+        const payload = await res.json().catch(() => ({}));
+        throw new Error(payload?.error || 'Não foi possível desligar a biometria.');
+      }
+
+      setPasskeyCredentials([]);
+      setHasPasskeys(false);
+      await syncVault({
+        nextCategories: categories,
+        nextPasswords: passwords,
+        nextCards: cards,
+        nextPasskeys: [],
+      });
+      showToast('Biometria desactivada.');
+    } catch (err) {
+      setBiometricError(err.message || 'Não foi possível desligar a biometria.');
+    } finally {
+      setIsBiometricBusy(false);
+    }
+  };
 
   return (
     <div className="space-y-8 animate-in fade-in max-w-2xl mx-auto pb-20">
@@ -2335,16 +2870,125 @@ const SettingsScreen = () => {
         </select>
       </div>
 
+      <div className="pt-4 border-t border-[var(--border)]">
+        <h2 className="text-lg font-semibold text-[var(--text)] flex items-center">
+          <Shield size={20} className="mr-2 text-[var(--primary)]" />
+          {t('changeMasterPassword')}
+        </h2>
+        <p className="mt-2 text-sm text-[var(--text-muted)]">
+          Actualiza a palavra-passe mestra e reencripta o cofre no servidor.
+        </p>
+        <div className="mt-4">
+          <Button variant="secondary" icon={Lock} className="w-full py-3" onClick={() => {
+            setMasterChangeError('');
+            setCurrentMasterPwd('');
+            setNewMasterPwd('');
+            setConfirmNewMasterPwd('');
+            setIsMasterModalOpen(true);
+          }}>
+            {t('changeMasterPassword')}
+          </Button>
+        </div>
+      </div>
+
+      <div className="pt-4 border-t border-[var(--border)]">
+        <h2 className="text-lg font-semibold text-[var(--text)] flex items-center">
+          <Key size={20} className="mr-2 text-[var(--primary)]" />
+          {t('biometricsSection')}
+        </h2>
+        <p className="mt-2 text-sm text-[var(--text-muted)]">
+          Usa passkeys/biometria para desbloquear o cofre neste dispositivo ou smartphone.
+        </p>
+        {biometricError && (
+          <p className="mt-3 text-[var(--danger)] text-sm flex items-center">
+            <AlertTriangle size={14} className="mr-1" />
+            {biometricError}
+          </p>
+        )}
+        <div className="mt-4 space-y-3">
+          <Button
+            variant="secondary"
+            icon={Shield}
+            className="w-full py-3"
+            onClick={handleRegisterBiometrics}
+            disabled={isBiometricBusy || !masterHash || !vaultKey || !vaultKeyRaw}
+          >
+            {isBiometricBusy ? t('generating') : t('registerBiometrics')}
+          </Button>
+          {hasPasskeys && (
+            <Button
+              variant="danger"
+              icon={Trash}
+              className="w-full py-3"
+              onClick={handleDisableBiometrics}
+              disabled={isBiometricBusy}
+            >
+              {t('disableBiometrics')}
+            </Button>
+          )}
+        </div>
+      </div>
+
       <div className="pt-8 border-t border-[var(--border)]">
         <Button variant="danger" icon={LogOut} className="w-full py-3" onClick={() => {
           setIsLocked(true);
           setMasterHash(null);
           setVaultKey(null);
+          setVaultKeyRaw(null);
+          setVaultKeyWrapMaster(null);
           setVaultSalt(null);
+          setPasskeyCredentials([]);
+          setHasPasskeys(false);
           sessionStorage.removeItem('pv_master_hash');
           sessionStorage.removeItem('pv_vault_salt');
         }}>{t('logout')}</Button>
       </div>
+
+      <Modal isOpen={isMasterModalOpen} onClose={closeMasterModal} title={t('changeMasterPassword')}>
+        <form onSubmit={handleChangeMasterPassword} className="space-y-4">
+          <Input
+            label={t('currentMasterPassword')}
+            type="password"
+            icon={Lock}
+            value={currentMasterPwd}
+            onChange={e => setCurrentMasterPwd(e.target.value)}
+            required
+            autoFocus
+          />
+          <Input
+            label={t('newMasterPassword')}
+            type="password"
+            icon={Lock}
+            value={newMasterPwd}
+            onChange={e => setNewMasterPwd(e.target.value)}
+            required
+          />
+          <Input
+            label={t('confirmNewMasterPassword')}
+            type="password"
+            icon={Lock}
+            value={confirmNewMasterPwd}
+            onChange={e => setConfirmNewMasterPwd(e.target.value)}
+            required
+          />
+
+          {masterChangeError && (
+            <p className="text-[var(--danger)] text-sm flex items-center">
+              <AlertTriangle size={14} className="mr-1" />
+              {masterChangeError}
+            </p>
+          )}
+
+          <div className="flex space-x-3 pt-4">
+            <Button type="button" variant="secondary" onClick={closeMasterModal} className="flex-1">
+              {t('cancel')}
+            </Button>
+            <Button type="submit" disabled={isChangingMaster} className="flex-1">
+              {isChangingMaster ? t('generating') : t('updateMasterPassword')}
+            </Button>
+          </div>
+        </form>
+      </Modal>
     </div>
   );
 };
@@ -2354,7 +2998,7 @@ const SettingsScreen = () => {
 // ==========================================
 
 const MainLayout = () => {
-  const { activeTab, setActiveTab, t, setIsLocked, setMasterHash, setVaultKey, setVaultSalt } = useContext(AppContext);
+  const { activeTab, setActiveTab, t, setIsLocked, setMasterHash, setVaultKey, setVaultKeyRaw, setVaultKeyWrapMaster, setVaultSalt, setPasskeyCredentials, setHasPasskeys } = useContext(AppContext);
 
   const navItems = [
     { id: 'dashboard', icon: LayoutDashboard, label: t('dashboard') },
@@ -2368,7 +3012,11 @@ const MainLayout = () => {
     setIsLocked(true);
     setMasterHash(null);
     setVaultKey(null);
+    setVaultKeyRaw(null);
+    setVaultKeyWrapMaster(null);
     setVaultSalt(null);
+    setPasskeyCredentials([]);
+    setHasPasskeys(false);
     sessionStorage.removeItem('pv_master_hash');
     sessionStorage.removeItem('pv_vault_salt');
   };
