@@ -11,7 +11,8 @@ import {
 // CONFIGURAÇÃO DA API (Backend Unraid)
 // ==========================================
 // Alterar 'localhost' para o IP do seu Unraid quando compilar (ex: 192.168.1.100)
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
+const isNativeApp = typeof window !== 'undefined' && window.Capacitor?.isNativePlatform?.();
+const API_URL = import.meta.env.VITE_API_URL || (isNativeApp ? 'https://passvault.barrosoportal.com/api' : 'http://localhost:3001/api');
 const PREVIEW_MODE = import.meta.env.VITE_PREVIEW_MODE === 'true';
 const VAULT_KDF_ITERATIONS = 250000;
 const PASSKEY_STORAGE_KEYS = {
