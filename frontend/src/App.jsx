@@ -1625,10 +1625,6 @@ const PasswordManager = () => {
     return passwords.filter(p => p.category === cat).length;
   };
 
-  const totalEntries = passwords.length;
-  const favoriteEntries = passwords.filter(p => p.favorite).length;
-  const categoryEntries = categories.filter(cat => cat.name !== 'Other').length;
-
   return (
     <div className="relative h-full overflow-hidden rounded-[32px] border border-[var(--border)] bg-[var(--surface)]/90 shadow-[0_30px_80px_-36px_rgba(0,0,0,0.55)]">
       <div className="pointer-events-none absolute inset-0">
@@ -1642,17 +1638,6 @@ const PasswordManager = () => {
           <h1 className="mt-4 text-3xl sm:text-4xl font-black tracking-tight text-[var(--text)]">
             {t('passwords')}
           </h1>
-
-          <div className="mt-6 grid w-full max-w-2xl grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4">
-            <div className="rounded-3xl border border-[var(--border)] bg-[var(--bg)]/70 p-4 text-center backdrop-blur">
-              <p className="text-[11px] uppercase tracking-[0.24em] text-[var(--text-muted)]">{t('totalPasswords')}</p>
-              <p className="mt-2 text-2xl font-black text-[var(--text)]">{totalEntries}</p>
-            </div>
-            <div className="rounded-3xl border border-[var(--border)] bg-[var(--bg)]/70 p-4 text-center backdrop-blur">
-              <p className="text-[11px] uppercase tracking-[0.24em] text-[var(--text-muted)]">{t('categoriesLabel')}</p>
-              <p className="mt-2 text-2xl font-black text-[var(--text)]">{categoryEntries}</p>
-            </div>
-          </div>
         </div>
 
         {!selectedCategory ? (
