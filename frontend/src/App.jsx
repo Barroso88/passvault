@@ -1662,13 +1662,8 @@ const PasswordManager = () => {
               </Button>
             </div>
 
-            <div className="mx-auto w-full max-w-3xl overflow-hidden rounded-2xl border border-white/8 bg-white/[0.02]">
-              <div className="grid grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-3 border-b border-white/8 px-4 py-3 text-[10px] font-semibold uppercase tracking-[0.26em] text-white/40">
-                <span>{t('category')}</span>
-                <span className="text-center">{t('items')}</span>
-                <span className="text-right">{t('actions') || 'Ações'}</span>
-              </div>
-              <div className="divide-y divide-white/8">
+            <div className="w-full">
+              <div className="divide-y divide-white/8 border-y border-white/8">
                 {orderedCategories.map(cat => {
                   const tone = cat.name === 'Other' ? CATEGORY_NEUTRAL : createFolderColor(cat.order);
                   return (
@@ -1686,7 +1681,7 @@ const PasswordManager = () => {
                           setSelectedCategory(cat.name);
                         }
                       }}
-                      className="group grid cursor-pointer grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-white/[0.04] focus-visible:bg-white/[0.04] focus-visible:outline-none"
+                      className="group grid cursor-pointer grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-3 px-0 py-3 text-left transition-colors hover:bg-white/[0.03] focus-visible:bg-white/[0.03] focus-visible:outline-none"
                     >
                       <div className="flex min-w-0 items-center gap-3">
                         <span
