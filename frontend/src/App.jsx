@@ -1843,8 +1843,8 @@ const PasswordManager = () => {
                       </button>
                       {expandedItemId === item.id && (
                         <div className="pt-0">
-                          <div className="flex flex-wrap items-center gap-3 px-3 py-3 sm:px-4">
-                            <div className="flex min-w-[180px] flex-[1.05] items-center gap-2 rounded-full border border-white/6 bg-black/10 px-3 py-2">
+                          <div className="grid gap-2 px-3 py-3 sm:px-4 md:grid-cols-[minmax(0,1fr)_minmax(0,1.25fr)]">
+                            <div className="flex min-w-0 items-center gap-2 rounded-full border border-white/6 bg-black/10 px-3 py-2">
                               <span className="text-[9px] font-semibold uppercase tracking-[0.18em] text-[var(--text-muted)]">User</span>
                               <span className="min-w-0 flex-1 truncate text-sm text-[var(--text)]">{item.username || '—'}</span>
                               <button
@@ -1860,7 +1860,7 @@ const PasswordManager = () => {
                               </button>
                             </div>
 
-                            <div className="flex min-w-[220px] flex-[1.15] items-center gap-2 rounded-full border border-[var(--primary)]/20 bg-[linear-gradient(135deg,rgba(124,92,255,0.14),rgba(255,255,255,0.03))] px-3 py-2 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]">
+                            <div className="flex min-w-0 items-center gap-2 rounded-full border border-[var(--primary)]/20 bg-[linear-gradient(135deg,rgba(124,92,255,0.14),rgba(255,255,255,0.03))] px-3 py-2 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]">
                               <span className="text-[9px] font-semibold uppercase tracking-[0.18em] text-[var(--primary)]/90">Pass</span>
                               <div className="min-w-0 flex-1 overflow-hidden">
                                 <SecretText
@@ -1885,7 +1885,7 @@ const PasswordManager = () => {
                             </div>
 
                             {item.notes && (
-                              <div className="min-w-[200px] flex-[1] px-1 py-1">
+                              <div className="md:col-span-2 px-1 py-1">
                                 <span className="mr-2 text-[9px] font-semibold uppercase tracking-[0.18em] text-[var(--text-muted)]">Notas</span>
                                 <span className="truncate text-sm text-[var(--text)]">{item.notes}</span>
                               </div>
