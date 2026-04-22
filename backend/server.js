@@ -133,6 +133,31 @@ function getCredentials(vault) {
     return normalizeJson(vault?.webauthn_credentials, []);
 }
 
+function getCategoryName(category) {
+    if (typeof category === 'string') return category;
+    return category?.name || category?.title || '';
+}
+
+function isSystemCategory(name) {
+    return name === 'Other';
+}
+
+function sortCategories(categories = []) {
+    return (Array.isArray(categories) ? categories : [])
+        .filter((category) => getCategoryName(category))
+        .slice()
+        .sort((a, b) => {
+            const aName = getCategoryName(a);
+            const bName = getCategoryName(b);
+            const aSystem = isSystemCategory(aName);
+            const bSystem = isSystemCategory(bName);
+            if (aSystem && bSystem) return 0;
+            if (aSystem) return 1;
+            if (bSystem) return -1;
+            return aName.localeCompare(bName, undefined, { sensitivity: 'base' });
+        });
+}
+
 function getMasterWrap(vault) {
     return vault?.vault_key_wrap_master || null;
 }
@@ -210,7 +235,7 @@ app.post('/api/login', async (req, res) => {
         if (vault.master_hash !== hash) return res.status(401).json({ error: 'Password inválida.' });
 
         res.json({
-            categories: vault.categories,
+            categories: sortCategories(normalizeJson(vault.categories, [])),
             passwords: vault.passwords,
             cards: vault.cards,
             vaultSalt: vault.vault_salt || null,
@@ -235,11 +260,12 @@ app.put('/api/sync', async (req, res) => {
         const nextCredentials = typeof webauthnCredentials === 'undefined'
             ? getCredentials(vault)
             : normalizeJson(webauthnCredentials, []);
+        const nextCategories = sortCategories(normalizeJson(categories, []));
 
         await pool.query(
             'UPDATE vault SET categories = $1, passwords = $2, cards = $3, vault_salt = $4, vault_version = $5, vault_key_wrap_master = $6, webauthn_credentials = $7 WHERE user_id = $8',
             [
-                JSON.stringify(categories),
+                JSON.stringify(nextCategories),
                 JSON.stringify(passwords),
                 JSON.stringify(cards),
                 vaultSalt || vault.vault_salt || null,
@@ -264,13 +290,14 @@ app.post('/api/migrate', async (req, res) => {
             return res.status(401).json({ error: 'Não autorizado.' });
         }
 
+        const nextCategories = sortCategories(normalizeJson(categories, []));
         await pool.query(
             'UPDATE vault SET master_hash = $1, vault_salt = $2, vault_version = 2, vault_key_wrap_master = $3, categories = $4, passwords = $5, cards = $6 WHERE user_id = $7',
             [
                 newHash,
                 salt,
                 vaultKeyWrapMaster ? JSON.stringify(vaultKeyWrapMaster) : null,
-                JSON.stringify(categories),
+                JSON.stringify(nextCategories),
                 JSON.stringify(passwords),
                 JSON.stringify(cards),
                 USER_ID,
