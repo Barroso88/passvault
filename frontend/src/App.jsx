@@ -1683,7 +1683,7 @@ const PasswordManager = () => {
 
   return (
     <div className="relative h-full overflow-hidden bg-transparent">
-      <div className="relative h-full flex flex-col p-3 sm:p-6 lg:p-8">
+      <div className="relative h-full flex flex-col p-2 sm:p-6 lg:p-8">
         <div className="mx-auto flex w-full max-w-4xl flex-col items-center text-center">
           <h1 className="mt-2 text-2xl font-black tracking-tight text-[var(--text)] sm:mt-4 sm:text-4xl">
             {t('passwords')}
@@ -1720,18 +1720,18 @@ const PasswordManager = () => {
                           setSelectedCategory(cat.name);
                         }
                       }}
-                      className="group flex w-full cursor-pointer items-center gap-2 px-0 py-2 text-left transition-colors hover:bg-white/[0.03] focus-visible:bg-white/[0.03] focus-visible:outline-none sm:gap-3 sm:py-3"
+                      className="group flex w-full cursor-pointer items-center gap-1.5 px-0 py-2 text-left transition-colors hover:bg-white/[0.03] focus-visible:bg-white/[0.03] focus-visible:outline-none sm:gap-3 sm:py-3"
                     >
-                      <div className="flex min-w-0 flex-1 items-center gap-2 sm:gap-3">
+                      <div className="flex min-w-0 flex-1 items-center gap-1.5 sm:gap-3">
                         <span
-                          className="h-6 w-1.5 rounded-full shrink-0 sm:h-8"
+                          className="h-6 w-1 rounded-full shrink-0 sm:h-8 sm:w-1.5"
                           style={{ background: `linear-gradient(180deg, ${tone.base}, ${tone.dark})` }}
                         />
                         <div className="min-w-0">
                           <div className="flex min-w-0 items-center gap-2">
-                            <h3 className="truncate text-[15px] font-semibold tracking-wide text-white sm:text-[15px]">{cat.name}</h3>
+                            <h3 className="truncate text-[16px] font-semibold tracking-wide text-white sm:text-[15px]">{cat.name}</h3>
                             {isSystemCategory(cat.name) && (
-                              <span className="rounded-full border border-white/10 bg-black/15 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-[0.18em] text-white/70">
+                              <span className="rounded-full border border-white/10 bg-black/15 px-1 py-0.5 text-[8px] font-semibold uppercase tracking-[0.14em] text-white/70">
                                 Sistema
                               </span>
                             )}
@@ -1740,12 +1740,12 @@ const PasswordManager = () => {
                       </div>
 
                       <div className="flex shrink-0 items-center gap-2">
-                        <span className="w-fit rounded-full border border-black/35 bg-black/40 px-2 py-0.5 text-[9px] font-semibold uppercase tracking-[0.18em] text-white/90 backdrop-blur sm:px-2.5 sm:py-1 sm:text-[10px]">
+                        <span className="w-fit rounded-full border border-black/35 bg-black/40 px-1.5 py-0.5 text-[8px] font-semibold uppercase tracking-[0.14em] text-white/90 backdrop-blur sm:px-2.5 sm:py-1 sm:text-[10px]">
                           {getCatCount(cat.name)} {t('items')}
                         </span>
                       </div>
 
-                      <div className="flex shrink-0 items-center gap-1 sm:gap-2" data-folder-actions="true">
+                      <div className="flex shrink-0 items-center gap-1" data-folder-actions="true">
                         {!isSystemCategory(cat.name) && (
                           <>
                             <button
@@ -1755,10 +1755,10 @@ const PasswordManager = () => {
                                 e.stopPropagation();
                                 openEditCategory(cat);
                               }}
-                              className="rounded-full border border-white/10 bg-white/5 p-1.5 text-white/70 transition-colors hover:bg-white/10 hover:text-white sm:p-2"
+                              className="rounded-full border border-white/10 bg-white/5 p-[5px] text-white/70 transition-colors hover:bg-white/10 hover:text-white sm:p-2"
                               aria-label={`Editar ${cat.name}`}
                             >
-                              <Edit size={12} />
+                              <Edit size={11} />
                             </button>
                             <button
                               type="button"
@@ -1767,14 +1767,14 @@ const PasswordManager = () => {
                                 e.stopPropagation();
                                 handleDeleteCategory(cat.name);
                               }}
-                              className="rounded-full border border-white/10 bg-white/5 p-1.5 text-white/70 transition-colors hover:bg-white/10 hover:text-white sm:p-2"
+                              className="rounded-full border border-white/10 bg-white/5 p-[5px] text-white/70 transition-colors hover:bg-white/10 hover:text-white sm:p-2"
                               aria-label={`Apagar ${cat.name}`}
                             >
-                              <Trash size={12} />
+                              <Trash size={11} />
                             </button>
                           </>
                         )}
-                        <ChevronRight size={15} className="ml-1 shrink-0 text-white/35 transition-transform group-hover:translate-x-0.5 sm:ml-0" />
+                        <ChevronRight size={14} className="ml-0.5 shrink-0 text-white/35 transition-transform group-hover:translate-x-0.5 sm:ml-0" />
                       </div>
                     </div>
                   );
