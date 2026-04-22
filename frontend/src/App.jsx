@@ -307,43 +307,17 @@ const CATEGORY_NEUTRAL = {
   glow: 'hsla(215 16% 65% / 0.18)',
 };
 
-const hashString = (value = '') => {
-  let x = 0x811c9dc5;
-  for (let i = 0; i < value.length; i += 1) {
-    x ^= value.charCodeAt(i);
-    x = Math.imul(x, 0x01000193);
-  }
-  return x >>> 0;
-};
-
-const hashNumber = (value) => {
-  let x = (value + 0x9e3779b9) >>> 0;
-  x ^= x << 13;
-  x ^= x >>> 17;
-  x ^= x << 5;
-  return x >>> 0;
-};
-
-const CATEGORY_PALETTE = [
-  { base: 'hsl(10 92% 58%)', dark: 'hsl(10 92% 32%)', glow: 'hsla(10 92% 65% / 0.24)' },
-  { base: 'hsl(28 95% 56%)', dark: 'hsl(28 95% 31%)', glow: 'hsla(28 95% 65% / 0.24)' },
-  { base: 'hsl(48 95% 55%)', dark: 'hsl(48 95% 30%)', glow: 'hsla(48 95% 65% / 0.24)' },
-  { base: 'hsl(78 88% 52%)', dark: 'hsl(78 88% 28%)', glow: 'hsla(78 88% 65% / 0.24)' },
-  { base: 'hsl(112 74% 47%)', dark: 'hsl(112 74% 24%)', glow: 'hsla(112 74% 62% / 0.24)' },
-  { base: 'hsl(145 70% 44%)', dark: 'hsl(145 70% 22%)', glow: 'hsla(145 70% 62% / 0.24)' },
-  { base: 'hsl(170 76% 42%)', dark: 'hsl(170 76% 22%)', glow: 'hsla(170 76% 62% / 0.24)' },
-  { base: 'hsl(196 92% 56%)', dark: 'hsl(196 92% 31%)', glow: 'hsla(196 92% 64% / 0.24)' },
-  { base: 'hsl(222 86% 58%)', dark: 'hsl(222 86% 30%)', glow: 'hsla(222 86% 64% / 0.24)' },
-  { base: 'hsl(249 82% 61%)', dark: 'hsl(249 82% 32%)', glow: 'hsla(249 82% 66% / 0.24)' },
-  { base: 'hsl(276 84% 62%)', dark: 'hsl(276 84% 34%)', glow: 'hsla(276 84% 67% / 0.24)' },
-  { base: 'hsl(304 78% 60%)', dark: 'hsl(304 78% 34%)', glow: 'hsla(304 78% 67% / 0.24)' },
-  { base: 'hsl(332 84% 60%)', dark: 'hsl(332 84% 32%)', glow: 'hsla(332 84% 67% / 0.24)' },
-  { base: 'hsl(355 85% 60%)', dark: 'hsl(355 85% 32%)', glow: 'hsla(355 85% 67% / 0.24)' },
-];
-
-const createFolderColor = (name) => {
-  const hash = hashString(String(name || ''));
-  return CATEGORY_PALETTE[hash % CATEGORY_PALETTE.length];
+const createFolderColor = (order = 0) => {
+  const seed = Number.isFinite(Number(order)) ? Number(order) : 0;
+  const hue = (seed * 137.508) % 360;
+  const saturation = 84 - ((seed % 4) * 6);
+  const lightness = 55 - ((seed % 3) * 2);
+  const darkLightness = Math.max(20, lightness - 24);
+  return {
+    base: `hsl(${hue} ${saturation}% ${lightness}%)`,
+    dark: `hsl(${hue} ${saturation}% ${darkLightness}%)`,
+    glow: `hsla(${hue} ${saturation}% 66% / 0.24)`,
+  };
 };
 
 const normalizeCategories = (input = []) => {
@@ -377,7 +351,7 @@ const normalizeCategories = (input = []) => {
 };
 
 const getCategoryStyle = (category) => {
-  const tone = category.name === 'Other' ? CATEGORY_NEUTRAL : createFolderColor(category.name);
+  const tone = category.name === 'Other' ? CATEGORY_NEUTRAL : createFolderColor(category.order);
   return {
     backgroundImage: `linear-gradient(145deg, ${tone.base}, ${tone.dark})`,
     boxShadow: `0 16px 30px -20px rgba(0, 0, 0, 0.7), inset 0 1px 0 rgba(255,255,255,0.08), 0 0 0 1px rgba(255,255,255,0.03), 0 0 24px ${tone.glow}`,
