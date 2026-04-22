@@ -117,6 +117,8 @@ const TRANSLATIONS = {
     registerBiometrics: 'Registar Biometria',
     disableBiometrics: 'Desligar Biometria',
     biometricsSection: 'Biometria / Passkeys',
+    biometricAlreadyRegistered: 'Já existe uma passkey neste dispositivo.',
+    biometricAlreadyRegisteredHint: 'Desliga a biometria existente antes de criar outra.',
   },
   en: {
     welcome: 'Welcome to PassVault',
@@ -200,6 +202,8 @@ const TRANSLATIONS = {
     registerBiometrics: 'Register Biometrics',
     disableBiometrics: 'Disable Biometrics',
     biometricsSection: 'Biometrics / Passkeys',
+    biometricAlreadyRegistered: 'A passkey is already registered on this device.',
+    biometricAlreadyRegisteredHint: 'Disable the existing biometrics before creating another one.',
   },
   es: {
     welcome: 'Bienvenido a PassVault',
@@ -283,6 +287,8 @@ const TRANSLATIONS = {
     registerBiometrics: 'Registrar Biometría',
     disableBiometrics: 'Desactivar Biometría',
     biometricsSection: 'Biometría / Passkeys',
+    biometricAlreadyRegistered: 'Ya existe una passkey en este dispositivo.',
+    biometricAlreadyRegisteredHint: 'Desactiva la biometría existente antes de crear otra.',
   }
 };
 
@@ -2609,6 +2615,15 @@ const SettingsScreen = () => {
     setMasterChangeError('');
   };
 
+  const getBiometricRegistrationError = (err) => {
+    const message = err?.message || '';
+    const code = err?.code || err?.cause?.code || '';
+    if (code === 'ERROR_AUTHENTICATOR_PREVIOUSLY_REGISTERED' || /previously registered/i.test(message)) {
+      return `${t('biometricAlreadyRegistered')} ${t('biometricAlreadyRegisteredHint')}`;
+    }
+    return message || 'Não foi possível registar a biometria.';
+  };
+
   const handleChangeMasterPassword = async (e) => {
     e.preventDefault();
 
@@ -2801,7 +2816,7 @@ const SettingsScreen = () => {
       });
       showToast('Biometria registada.');
     } catch (err) {
-      setBiometricError(err.message || 'Não foi possível registar a biometria.');
+      setBiometricError(getBiometricRegistrationError(err));
     } finally {
       setIsBiometricBusy(false);
     }
