@@ -1644,26 +1644,26 @@ const PasswordManager = () => {
 
   return (
     <div className="relative h-full overflow-hidden bg-transparent">
-      <div className="relative h-full flex flex-col p-5 sm:p-6 lg:p-8">
+      <div className="relative h-full flex flex-col p-4 sm:p-6 lg:p-8">
         <div className="mx-auto flex w-full max-w-4xl flex-col items-center text-center">
-          <h1 className="mt-4 text-3xl sm:text-4xl font-black tracking-tight text-[var(--text)]">
+          <h1 className="mt-2 text-2xl font-black tracking-tight text-[var(--text)] sm:mt-4 sm:text-4xl">
             {t('passwords')}
           </h1>
         </div>
 
         {!selectedCategory ? (
           <div className="mt-6 flex-1 overflow-y-auto pb-4">
-            <div className="mb-5 flex flex-wrap justify-center gap-3">
-              <Button onClick={() => handleOpenModal()} icon={Plus} className="rounded-2xl px-5">
+            <div className="mb-5 flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:justify-center sm:gap-3">
+              <Button onClick={() => handleOpenModal()} icon={Plus} className="w-full rounded-2xl px-5 sm:w-auto">
                 {t('addPassword')}
               </Button>
-              <Button onClick={openNewCategory} variant="secondary" icon={Plus} className="rounded-2xl px-5">
+              <Button onClick={openNewCategory} variant="secondary" icon={Plus} className="w-full rounded-2xl px-5 sm:w-auto">
                 {t('newCategory')}
               </Button>
             </div>
 
             <div className="w-full">
-              <div className="divide-y divide-white/8 border-y border-white/8">
+              <div className="divide-y divide-white/8 border-y border-white/8 sm:rounded-none">
                 {orderedCategories.map(cat => {
                   const tone = cat.name === 'Other' ? CATEGORY_NEUTRAL : createFolderColor(cat.order);
                   return (
@@ -1681,16 +1681,16 @@ const PasswordManager = () => {
                           setSelectedCategory(cat.name);
                         }
                       }}
-                      className="group grid cursor-pointer grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-3 px-0 py-3 text-left transition-colors hover:bg-white/[0.03] focus-visible:bg-white/[0.03] focus-visible:outline-none"
+                      className="group grid cursor-pointer grid-cols-1 items-start gap-3 px-0 py-3 text-left transition-colors hover:bg-white/[0.03] focus-visible:bg-white/[0.03] focus-visible:outline-none sm:grid-cols-[minmax(0,1fr)_auto_auto] sm:items-center sm:gap-3 sm:py-3"
                     >
                       <div className="flex min-w-0 items-center gap-3">
                         <span
-                          className="h-8 w-1.5 rounded-full shrink-0"
+                          className="h-7 w-1.5 rounded-full shrink-0 sm:h-8"
                           style={{ background: `linear-gradient(180deg, ${tone.base}, ${tone.dark})` }}
                         />
                         <div className="min-w-0">
                           <div className="flex items-center gap-2">
-                            <h3 className="truncate text-[15px] font-semibold tracking-wide text-white">{cat.name}</h3>
+                            <h3 className="truncate text-[15px] font-semibold tracking-wide text-white sm:text-[15px]">{cat.name}</h3>
                             {isSystemCategory(cat.name) && (
                               <span className="rounded-full border border-white/10 bg-black/15 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.22em] text-white/70">
                                 Sistema
@@ -1700,11 +1700,13 @@ const PasswordManager = () => {
                         </div>
                       </div>
 
-                      <span className="rounded-full border border-black/35 bg-black/40 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.22em] text-white/90 backdrop-blur">
-                        {getCatCount(cat.name)} {t('items')}
-                      </span>
+                      <div className="flex items-center gap-2 sm:justify-self-center sm:justify-end">
+                        <span className="w-fit rounded-full border border-black/35 bg-black/40 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.22em] text-white/90 backdrop-blur">
+                          {getCatCount(cat.name)} {t('items')}
+                        </span>
+                      </div>
 
-                      <div className="flex items-center justify-end gap-2" data-folder-actions="true">
+                      <div className="flex items-center gap-2 sm:justify-end" data-folder-actions="true">
                         {!isSystemCategory(cat.name) && (
                           <>
                             <button
@@ -1733,7 +1735,7 @@ const PasswordManager = () => {
                             </button>
                           </>
                         )}
-                        <ChevronRight size={15} className="text-white/45 transition-transform group-hover:translate-x-0.5" />
+                        <ChevronRight size={15} className="ml-auto text-white/35 transition-transform group-hover:translate-x-0.5 sm:ml-0" />
                       </div>
                     </div>
                   );
@@ -1744,25 +1746,25 @@ const PasswordManager = () => {
         ) : (
           <div className="mt-6 flex-1 overflow-y-auto pb-4">
             <div className="mb-5 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-              <div>
+              <div className="w-full lg:w-auto">
                 <button
                   type="button"
                   onClick={() => {
                     setSelectedCategory(null);
                     setSearch('');
                   }}
-                  className="inline-flex items-center gap-2 rounded-full border border-[var(--border)] bg-[var(--bg)]/60 px-3 py-1.5 text-xs font-semibold uppercase tracking-[0.22em] text-[var(--text-muted)] transition-colors hover:border-[var(--primary)] hover:text-[var(--primary)]"
+                  className="inline-flex w-full items-center justify-center gap-2 rounded-full border border-[var(--border)] bg-[var(--bg)]/60 px-3 py-2 text-xs font-semibold uppercase tracking-[0.22em] text-[var(--text-muted)] transition-colors hover:border-[var(--primary)] hover:text-[var(--primary)] lg:w-auto"
                 >
                   <ArrowLeft size={12} />
                   {t('backToFolders')}
                 </button>
-                <h2 className="mt-4 text-2xl font-black text-[var(--text)]">{selectedCategory}</h2>
+                <h2 className="mt-4 text-2xl font-black text-[var(--text)] sm:text-3xl">{selectedCategory}</h2>
                 <p className="mt-2 text-sm text-[var(--text-muted)]">
                   {selectedCategoryCount} {t('items')}
                 </p>
               </div>
 
-              <Button onClick={() => handleOpenModal()} icon={Plus} className="rounded-2xl px-5">
+              <Button onClick={() => handleOpenModal()} icon={Plus} className="w-full rounded-2xl px-5 sm:w-auto">
                 {t('addPassword')}
               </Button>
             </div>
