@@ -1652,9 +1652,12 @@ const PasswordManager = () => {
 
         {!selectedCategory ? (
           <div className="mt-6 flex-1 overflow-y-auto pb-4">
-            <div className="mb-5 flex justify-center">
+            <div className="mb-5 flex flex-wrap justify-center gap-3">
               <Button onClick={() => handleOpenModal()} icon={Plus} className="rounded-2xl px-5">
                 {t('addPassword')}
+              </Button>
+              <Button onClick={openNewCategory} variant="secondary" icon={Plus} className="rounded-2xl px-5">
+                {t('newCategory')}
               </Button>
             </div>
 
@@ -1728,28 +1731,6 @@ const PasswordManager = () => {
                   </div>
                 </div>
               ))}
-
-              <button
-                type="button"
-                onClick={openNewCategory}
-                className="group relative isolate flex w-full items-center justify-between gap-2.5 overflow-hidden rounded-[18px] border border-dashed border-white/18 px-3 py-2 text-left transition-all duration-200 hover:-translate-y-0.5 hover:border-white/28 hover:shadow-[0_16px_30px_-24px_rgba(0,0,0,0.8)]"
-                style={getCategoryStyle({ name: 'New', order: categories.length + 99 })}
-              >
-                <div className="absolute inset-x-3 top-2 h-px bg-white/14"></div>
-                <div className="absolute inset-x-4 bottom-2 h-3 rounded-full bg-black/22 blur-lg"></div>
-                <div className="absolute -right-5 -top-5 h-16 w-16 rounded-full bg-white/8 blur-2xl"></div>
-
-                <div className="relative min-w-0 flex-1">
-                  <div className="flex items-center gap-2">
-                    <h3 className="truncate text-[15px] font-semibold tracking-wide text-white">{t('newCategory')}</h3>
-                    <span className="rounded-full border border-white/10 bg-black/15 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.22em] text-white/70">
-                      +
-                    </span>
-                  </div>
-                </div>
-
-                <Plus size={14} className="relative text-white/80 transition-transform group-hover:rotate-90" />
-              </button>
             </div>
           </div>
         ) : (
