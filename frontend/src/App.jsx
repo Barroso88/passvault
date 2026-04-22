@@ -1648,7 +1648,7 @@ const PasswordManager = () => {
               </Button>
             </div>
 
-            <div className="space-y-3">
+            <div className="mx-auto w-full max-w-2xl space-y-2.5">
               {categories.map(cat => (
                 <div
                   key={cat.name}
@@ -1665,19 +1665,15 @@ const PasswordManager = () => {
                     }
                   }}
                   style={getCategoryStyle(cat)}
-                  className="group relative isolate flex w-full cursor-pointer items-center gap-4 overflow-hidden rounded-[22px] border border-white/10 px-4 py-3 text-left transition-all duration-200 hover:-translate-y-0.5 hover:border-white/20 hover:shadow-[0_16px_30px_-24px_rgba(0,0,0,0.8)]"
+                  className="group relative isolate flex w-full cursor-pointer items-center justify-between gap-3 overflow-hidden rounded-[18px] border border-white/10 px-3 py-2.5 text-left transition-all duration-200 hover:-translate-y-0.5 hover:border-white/20 hover:shadow-[0_16px_30px_-24px_rgba(0,0,0,0.8)]"
                 >
                   <div className="absolute inset-x-3 top-2 h-px bg-white/14"></div>
-                  <div className="absolute inset-x-4 bottom-2 h-4 rounded-full bg-black/25 blur-lg"></div>
-                  <div className="absolute -right-5 -top-5 h-20 w-20 rounded-full bg-white/8 blur-2xl"></div>
-
-                  <div className="relative flex h-11 w-11 shrink-0 items-center justify-center rounded-[14px] border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.16),rgba(255,255,255,0.03))] text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.18),0_12px_20px_-16px_rgba(0,0,0,0.9)]">
-                    <Folder size={18} />
-                  </div>
+                  <div className="absolute inset-x-4 bottom-2 h-3 rounded-full bg-black/25 blur-lg"></div>
+                  <div className="absolute -right-5 -top-5 h-16 w-16 rounded-full bg-white/8 blur-2xl"></div>
 
                   <div className="relative min-w-0 flex-1">
                     <div className="flex items-center gap-2">
-                      <h3 className="truncate text-sm font-semibold tracking-wide text-white">{cat.name}</h3>
+                      <h3 className="truncate text-[15px] font-semibold tracking-wide text-white">{cat.name}</h3>
                       {isSystemCategory(cat.name) && (
                         <span className="rounded-full border border-white/10 bg-black/15 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.22em] text-white/70">
                           Sistema
@@ -1726,20 +1722,16 @@ const PasswordManager = () => {
               <button
                 type="button"
                 onClick={openNewCategory}
-                className="group relative isolate flex w-full items-center gap-4 overflow-hidden rounded-[22px] border border-dashed border-white/18 px-4 py-3 text-left transition-all duration-200 hover:-translate-y-0.5 hover:border-white/28 hover:shadow-[0_16px_30px_-24px_rgba(0,0,0,0.8)]"
+                className="group relative isolate flex w-full items-center justify-between gap-3 overflow-hidden rounded-[18px] border border-dashed border-white/18 px-3 py-2.5 text-left transition-all duration-200 hover:-translate-y-0.5 hover:border-white/28 hover:shadow-[0_16px_30px_-24px_rgba(0,0,0,0.8)]"
                 style={getCategoryStyle({ name: 'New', order: categories.length + 99 })}
               >
                 <div className="absolute inset-x-3 top-2 h-px bg-white/14"></div>
-                <div className="absolute inset-x-4 bottom-2 h-4 rounded-full bg-black/22 blur-lg"></div>
-                <div className="absolute -right-5 -top-5 h-20 w-20 rounded-full bg-white/8 blur-2xl"></div>
-
-                <div className="relative flex h-11 w-11 shrink-0 items-center justify-center rounded-[14px] border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.16),rgba(255,255,255,0.03))] text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.18),0_12px_20px_-16px_rgba(0,0,0,0.9)]">
-                  <FolderPlus size={18} />
-                </div>
+                <div className="absolute inset-x-4 bottom-2 h-3 rounded-full bg-black/22 blur-lg"></div>
+                <div className="absolute -right-5 -top-5 h-16 w-16 rounded-full bg-white/8 blur-2xl"></div>
 
                 <div className="relative min-w-0 flex-1">
-                  <h3 className="truncate text-sm font-semibold tracking-wide text-white">{t('newCategory')}</h3>
-                  <p className="mt-1 text-xs text-white/75">Cria uma nova pasta</p>
+                  <h3 className="truncate text-[15px] font-semibold tracking-wide text-white">{t('newCategory')}</h3>
+                  <p className="mt-0.5 text-xs text-white/75">Cria uma nova pasta</p>
                 </div>
 
                 <Plus size={14} className="relative text-white/80 transition-transform group-hover:rotate-90" />
