@@ -1662,76 +1662,88 @@ const PasswordManager = () => {
               </Button>
             </div>
 
-            <div className="mx-auto w-full max-w-2xl space-y-2.5">
-              {orderedCategories.map(cat => (
-                <div
-                  key={cat.name}
-                  role="button"
-                  tabIndex={0}
-                  onClick={(e) => {
-                    if (e.target.closest('[data-folder-actions="true"]')) return;
-                    setSelectedCategory(cat.name);
-                  }}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' || e.key === ' ') {
-                      e.preventDefault();
-                      setSelectedCategory(cat.name);
-                    }
-                  }}
-                  style={getCategoryStyle(cat)}
-                  className="group relative isolate flex w-full cursor-pointer items-center justify-between gap-2.5 overflow-hidden rounded-[18px] border border-white/10 px-3 py-2 text-left transition-all duration-200 hover:-translate-y-0.5 hover:border-white/20 hover:shadow-[0_16px_30px_-24px_rgba(0,0,0,0.8)]"
-                >
-                  <div className="absolute inset-x-3 top-2 h-px bg-white/14"></div>
-                  <div className="absolute inset-x-4 bottom-2 h-3 rounded-full bg-black/25 blur-lg"></div>
-                  <div className="absolute -right-5 -top-5 h-16 w-16 rounded-full bg-white/8 blur-2xl"></div>
+            <div className="mx-auto w-full max-w-3xl overflow-hidden rounded-2xl border border-white/8 bg-white/[0.02]">
+              <div className="grid grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-3 border-b border-white/8 px-4 py-3 text-[10px] font-semibold uppercase tracking-[0.26em] text-white/40">
+                <span>{t('category')}</span>
+                <span className="text-center">{t('items')}</span>
+                <span className="text-right">{t('actions') || 'Ações'}</span>
+              </div>
+              <div className="divide-y divide-white/8">
+                {orderedCategories.map(cat => {
+                  const tone = cat.name === 'Other' ? CATEGORY_NEUTRAL : createFolderColor(cat.order);
+                  return (
+                    <div
+                      key={cat.name}
+                      role="button"
+                      tabIndex={0}
+                      onClick={(e) => {
+                        if (e.target.closest('[data-folder-actions="true"]')) return;
+                        setSelectedCategory(cat.name);
+                      }}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          e.preventDefault();
+                          setSelectedCategory(cat.name);
+                        }
+                      }}
+                      className="group grid cursor-pointer grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-white/[0.04] focus-visible:bg-white/[0.04] focus-visible:outline-none"
+                    >
+                      <div className="flex min-w-0 items-center gap-3">
+                        <span
+                          className="h-8 w-1.5 rounded-full shrink-0"
+                          style={{ background: `linear-gradient(180deg, ${tone.base}, ${tone.dark})` }}
+                        />
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-2">
+                            <h3 className="truncate text-[15px] font-semibold tracking-wide text-white">{cat.name}</h3>
+                            {isSystemCategory(cat.name) && (
+                              <span className="rounded-full border border-white/10 bg-black/15 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.22em] text-white/70">
+                                Sistema
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      </div>
 
-                  <div className="relative min-w-0 flex-1">
-                    <div className="flex items-center gap-2">
-                      <h3 className="truncate text-[15px] font-semibold tracking-wide text-white">{cat.name}</h3>
-                      <span className="rounded-full border border-black/50 bg-black/70 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.22em] text-white/95 backdrop-blur">
+                      <span className="rounded-full border border-black/35 bg-black/40 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.22em] text-white/90 backdrop-blur">
                         {getCatCount(cat.name)} {t('items')}
                       </span>
-                      {isSystemCategory(cat.name) && (
-                        <span className="rounded-full border border-white/10 bg-black/15 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.22em] text-white/70">
-                          Sistema
-                        </span>
-                      )}
-                    </div>
-                  </div>
 
-                  <div className="relative flex items-center gap-1.5">
-                    {!isSystemCategory(cat.name) && (
-                      <div data-folder-actions="true" className="mr-1 flex gap-1.5">
-                        <button
-                          type="button"
-                          onMouseDown={(e) => e.stopPropagation()}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            openEditCategory(cat);
-                          }}
-                          className="rounded-full border border-white/10 bg-black/15 p-2 text-white/80 backdrop-blur transition-colors hover:text-white"
-                          aria-label={`Editar ${cat.name}`}
-                        >
-                          <Edit size={13} />
-                        </button>
-                        <button
-                          type="button"
-                          onMouseDown={(e) => e.stopPropagation()}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleDeleteCategory(cat.name);
-                          }}
-                          className="rounded-full border border-white/10 bg-black/15 p-2 text-white/80 backdrop-blur transition-colors hover:text-white"
-                          aria-label={`Apagar ${cat.name}`}
-                        >
-                          <Trash size={13} />
-                        </button>
+                      <div className="flex items-center justify-end gap-2" data-folder-actions="true">
+                        {!isSystemCategory(cat.name) && (
+                          <>
+                            <button
+                              type="button"
+                              onMouseDown={(e) => e.stopPropagation()}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                openEditCategory(cat);
+                              }}
+                              className="rounded-full border border-white/10 bg-white/5 p-2 text-white/70 transition-colors hover:bg-white/10 hover:text-white"
+                              aria-label={`Editar ${cat.name}`}
+                            >
+                              <Edit size={13} />
+                            </button>
+                            <button
+                              type="button"
+                              onMouseDown={(e) => e.stopPropagation()}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleDeleteCategory(cat.name);
+                              }}
+                              className="rounded-full border border-white/10 bg-white/5 p-2 text-white/70 transition-colors hover:bg-white/10 hover:text-white"
+                              aria-label={`Apagar ${cat.name}`}
+                            >
+                              <Trash size={13} />
+                            </button>
+                          </>
+                        )}
+                        <ChevronRight size={15} className="text-white/45 transition-transform group-hover:translate-x-0.5" />
                       </div>
-                    )}
-                    <ChevronRight size={15} className="text-white/70 transition-transform group-hover:translate-x-1" />
-                  </div>
-                </div>
-              ))}
+                    </div>
+                  );
+                })}
+              </div>
             </div>
           </div>
         ) : (
