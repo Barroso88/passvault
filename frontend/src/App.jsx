@@ -1844,26 +1844,6 @@ const PasswordManager = () => {
                       {expandedItemId === item.id && (
                         <div className="pt-0">
                           <div className="flex flex-wrap items-center gap-3 px-3 py-3 sm:px-4">
-                            <div className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-2xl border border-white/6 bg-black/15">
-                              <img
-                                src={getFavicon(item.url)}
-                                alt=""
-                                className="h-6 w-6 object-contain"
-                                onError={(e) => { e.target.style.display='none'; e.target.nextSibling.style.display='flex'; }}
-                              />
-                              <div className="hidden h-10 w-10 items-center justify-center text-sm font-black text-white/90">
-                                {item.title.charAt(0)}
-                              </div>
-                            </div>
-
-                            <div className="min-w-0 flex-[1.25]">
-                              <div className="flex items-center gap-2">
-                                <h4 className="truncate text-sm font-semibold text-[var(--text)] sm:text-[15px]">{item.title}</h4>
-                                {item.favorite && <Star size={13} className="fill-current text-yellow-500" />}
-                              </div>
-                              <p className="truncate text-xs text-[var(--text-muted)]">{selectedCategory}</p>
-                            </div>
-
                             <div className="flex min-w-[180px] flex-[1.05] items-center gap-2 rounded-full border border-white/6 bg-black/10 px-3 py-2">
                               <span className="text-[9px] font-semibold uppercase tracking-[0.18em] text-[var(--text-muted)]">User</span>
                               <span className="min-w-0 flex-1 truncate text-sm text-[var(--text)]">{item.username || '—'}</span>
