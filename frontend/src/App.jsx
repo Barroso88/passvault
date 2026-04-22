@@ -1447,6 +1447,10 @@ const PasswordManager = () => {
     return passwords.filter(p => {
       const matchSearch = p.title.toLowerCase().includes(search.toLowerCase()) || p.username.toLowerCase().includes(search.toLowerCase());
       return matchSearch && p.category === selectedCategory;
+    }).sort((a, b) => {
+      const aLabel = (a.title || a.username || '').trim().toLocaleLowerCase();
+      const bLabel = (b.title || b.username || '').trim().toLocaleLowerCase();
+      return aLabel.localeCompare(bLabel, undefined, { sensitivity: 'base' });
     });
   }, [passwords, search, selectedCategory]);
 
