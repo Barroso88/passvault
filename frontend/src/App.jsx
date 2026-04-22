@@ -14,6 +14,10 @@ import {
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
 const PREVIEW_MODE = import.meta.env.VITE_PREVIEW_MODE === 'true';
 const VAULT_KDF_ITERATIONS = 250000;
+const PASSKEY_STORAGE_KEYS = {
+  hasPasskeys: 'pv_has_passkeys',
+  credentials: 'pv_passkey_credentials',
+};
 const textEncoder = new TextEncoder();
 const textDecoder = new TextDecoder();
 
@@ -427,6 +431,16 @@ const readPreviewState = (key, fallback) => {
   }
 };
 
+const readStoredState = (key, fallback) => {
+  try {
+    const raw = localStorage.getItem(key);
+    if (!raw) return fallback;
+    return JSON.parse(raw);
+  } catch {
+    return fallback;
+  }
+};
+
 const bytesToBase64 = (bytes) => {
   let binary = '';
   const chunkSize = 0x8000;
@@ -629,8 +643,10 @@ const AppProvider = ({ children }) => {
   const [vaultKey, setVaultKey] = useState(null);
   const [vaultKeyRaw, setVaultKeyRaw] = useState(null);
   const [vaultKeyWrapMaster, setVaultKeyWrapMaster] = useState(null);
-  const [hasPasskeys, setHasPasskeys] = useState(false);
-  const [passkeyCredentials, setPasskeyCredentials] = useState([]);
+  const [hasPasskeys, setHasPasskeys] = useState(PREVIEW_MODE ? false : !!readStoredState(PASSKEY_STORAGE_KEYS.hasPasskeys, false));
+  const [passkeyCredentials, setPasskeyCredentials] = useState(
+    PREVIEW_MODE ? [] : readStoredState(PASSKEY_STORAGE_KEYS.credentials, [])
+  );
   
   // Estado do Cofre (Agora inicializado vazio, preenchido via Postgres)
   const [categories, setCategories] = useState(
@@ -664,6 +680,14 @@ const AppProvider = ({ children }) => {
     if (!PREVIEW_MODE) return;
     localStorage.setItem('pv_preview_cards', JSON.stringify(cards));
   }, [cards]);
+  useEffect(() => {
+    if (PREVIEW_MODE) return;
+    localStorage.setItem(PASSKEY_STORAGE_KEYS.hasPasskeys, JSON.stringify(!!hasPasskeys));
+  }, [hasPasskeys]);
+  useEffect(() => {
+    if (PREVIEW_MODE) return;
+    localStorage.setItem(PASSKEY_STORAGE_KEYS.credentials, JSON.stringify(passkeyCredentials));
+  }, [passkeyCredentials]);
 
   const syncVault = useCallback(async ({
     nextCategories = categories,
@@ -730,15 +754,15 @@ const AppProvider = ({ children }) => {
     const resetTimer = () => {
       clearTimeout(timer);
       timer = setTimeout(() => {
-        setIsLocked(true);
-        sessionStorage.removeItem('pv_master_hash');
-        sessionStorage.removeItem('pv_vault_salt');
-        setMasterHash(null);
-        setVaultKey(null);
-        setVaultKeyRaw(null);
-        setVaultKeyWrapMaster(null);
-        setVaultSalt(null);
-      }, timeoutMinutes * 60000);
+      setIsLocked(true);
+      sessionStorage.removeItem('pv_master_hash');
+      sessionStorage.removeItem('pv_vault_salt');
+      setMasterHash(null);
+      setVaultKey(null);
+      setVaultKeyRaw(null);
+      setVaultKeyWrapMaster(null);
+      setVaultSalt(null);
+    }, timeoutMinutes * 60000);
     };
     window.addEventListener('mousemove', resetTimer);
     window.addEventListener('keypress', resetTimer);
@@ -1040,13 +1064,19 @@ const AuthScreen = () => {
   const [isBiometricLoading, setIsBiometricLoading] = useState(false);
 
   useEffect(() => {
-    fetch(`${API_URL}/status`)
-      .then(res => res.json())
-      .then(data => {
-        setIsSetupState(!data.isSetup);
-        setVaultSalt(data.vaultSalt || null);
-        setVaultVersion(data.vaultVersion || 1);
-        setHasPasskeys(!!data.hasPasskeys);
+    Promise.all([
+      fetch(`${API_URL}/status`).then((res) => res.json()),
+      fetch(`${API_URL}/passkeys/status`).then((res) => res.json()).catch(() => ({})),
+    ])
+      .then(([vaultStatus, passkeyStatus]) => {
+        setIsSetupState(!vaultStatus.isSetup);
+        setVaultSalt(vaultStatus.vaultSalt || null);
+        setVaultVersion(vaultStatus.vaultVersion || 1);
+        const nextHasPasskeys = typeof passkeyStatus.hasPasskeys === 'boolean'
+          ? passkeyStatus.hasPasskeys
+          : !!vaultStatus.hasPasskeys;
+        setHasPasskeys(nextHasPasskeys);
+        setPasskeyCredentials(Array.isArray(passkeyStatus.credentials) ? passkeyStatus.credentials : []);
         setIsLoading(false);
       })
       .catch((err) => {
@@ -1853,7 +1883,7 @@ const PasswordManager = () => {
       <Modal isOpen={!!detailItem} onClose={() => setDetailItem(null)} title={detailItem?.title || t('passwords')}>
         {detailItem && (
           <div className="space-y-4">
-            <div className="flex items-center gap-3">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
               <div className="flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-2xl border border-white/8 bg-black/15">
                 <img
                   src={getFavicon(detailItem.url)}
@@ -1923,7 +1953,7 @@ const PasswordManager = () => {
                     setDetailItem(null);
                     handleOpenModal(detailItem);
                   }}
-                  className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-full border border-white/8 bg-white/5 px-4 py-2 text-[11px] font-medium text-[var(--text-muted)] transition-colors hover:border-[var(--primary)] hover:text-[var(--primary)]"
+                  className="inline-flex w-full flex-1 items-center justify-center gap-1.5 rounded-full border border-white/8 bg-white/5 px-4 py-2 text-[11px] font-medium text-[var(--text-muted)] transition-colors hover:border-[var(--primary)] hover:text-[var(--primary)] sm:w-auto"
                 >
                   <Edit size={14} />
                   <span>Editar</span>
@@ -1934,7 +1964,7 @@ const PasswordManager = () => {
                     setDetailItem(null);
                     handleDelete(detailItem.id);
                   }}
-                  className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-full border border-white/8 bg-white/5 px-4 py-2 text-[11px] font-medium text-[var(--text-muted)] transition-colors hover:border-[var(--danger)] hover:text-[var(--danger)]"
+                  className="inline-flex w-full flex-1 items-center justify-center gap-1.5 rounded-full border border-white/8 bg-white/5 px-4 py-2 text-[11px] font-medium text-[var(--text-muted)] transition-colors hover:border-[var(--danger)] hover:text-[var(--danger)] sm:w-auto"
                 >
                   <Trash size={14} />
                   <span>Apagar</span>
@@ -2947,8 +2977,6 @@ const SettingsScreen = () => {
           setVaultKeyRaw(null);
           setVaultKeyWrapMaster(null);
           setVaultSalt(null);
-          setPasskeyCredentials([]);
-          setHasPasskeys(false);
           sessionStorage.removeItem('pv_master_hash');
           sessionStorage.removeItem('pv_vault_salt');
         }}>{t('logout')}</Button>
@@ -3025,8 +3053,6 @@ const MainLayout = () => {
     setVaultKeyRaw(null);
     setVaultKeyWrapMaster(null);
     setVaultSalt(null);
-    setPasskeyCredentials([]);
-    setHasPasskeys(false);
     sessionStorage.removeItem('pv_master_hash');
     sessionStorage.removeItem('pv_vault_salt');
   };
