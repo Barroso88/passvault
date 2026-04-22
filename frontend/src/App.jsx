@@ -1835,12 +1835,12 @@ const PasswordManager = () => {
                       </button>
 
                       {expandedItemId === item.id && (
-                        <div className="border-t border-white/8 pt-3">
-                          <div className="rounded-2xl border border-white/8 bg-white/[0.03] p-3 sm:p-4">
-                            <div className="grid gap-2.5 md:grid-cols-2">
-                              <div className="flex items-center gap-3 rounded-xl border border-white/8 bg-black/10 px-3 py-2.5">
+                        <div className="border-t border-white/6 pt-2.5 sm:pt-3">
+                          <div className="rounded-2xl border border-white/6 bg-white/[0.025] p-2.5 sm:p-4">
+                            <div className="grid gap-2 sm:gap-2.5 md:grid-cols-2">
+                              <div className="flex items-center gap-2.5 rounded-xl border border-white/6 bg-black/10 px-3 py-2.5 sm:gap-3">
                                 <div className="min-w-0 flex-1">
-                                  <p className="text-[10px] font-semibold uppercase tracking-[0.24em] text-[var(--text-muted)]">Utilizador</p>
+                                  <p className="text-[9px] font-semibold uppercase tracking-[0.18em] text-[var(--text-muted)]">Utilizador</p>
                                   <p className="mt-1 truncate text-xs text-[var(--text)]">{item.username || '—'}</p>
                                 </div>
                                 <button
@@ -1856,10 +1856,10 @@ const PasswordManager = () => {
                                 </button>
                               </div>
 
-                              <div className="flex items-center gap-3 rounded-xl border border-white/8 bg-black/10 px-3 py-2.5">
+                              <div className="flex items-center gap-2.5 rounded-xl border border-[var(--primary)]/25 bg-[var(--primary)]/10 px-3 py-2.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)] sm:gap-3">
                                 <div className="min-w-0 flex-1">
-                                  <p className="text-[10px] font-semibold uppercase tracking-[0.24em] text-[var(--text-muted)]">Password</p>
-                                  <p className="mt-1 truncate text-xs text-[var(--text)]">
+                                  <p className="text-[9px] font-semibold uppercase tracking-[0.18em] text-[var(--primary)]/90">Password</p>
+                                  <p className="mt-1 truncate text-xs font-medium text-[var(--text)]">
                                     <SecretText text={item.password} showCopy={false} />
                                   </p>
                                 </div>
@@ -1869,7 +1869,7 @@ const PasswordManager = () => {
                                     e.stopPropagation();
                                     copyToClipboard(item.password);
                                   }}
-                                  className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-white/8 bg-white/5 text-[var(--text-muted)] transition-colors hover:border-[var(--primary)] hover:text-[var(--primary)]"
+                                  className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-[var(--primary)]/25 bg-black/10 text-[var(--primary)] transition-colors hover:border-[var(--primary)] hover:bg-[var(--primary)]/15"
                                   title="Copiar password"
                                 >
                                   <Key size={13} />
@@ -1877,9 +1877,9 @@ const PasswordManager = () => {
                               </div>
 
                               {item.url && (
-                                <div className="flex items-center gap-3 rounded-xl border border-white/8 bg-black/10 px-3 py-2.5 md:col-span-2">
+                                <div className="flex items-center gap-2.5 rounded-xl border border-white/6 bg-black/8 px-3 py-2.5 md:col-span-2 sm:gap-3">
                                   <div className="min-w-0 flex-1">
-                                    <p className="text-[10px] font-semibold uppercase tracking-[0.24em] text-[var(--text-muted)]">URL</p>
+                                    <p className="text-[9px] font-semibold uppercase tracking-[0.18em] text-[var(--text-muted)]">URL</p>
                                     <p className="mt-1 truncate text-xs text-[var(--text)]">{item.url}</p>
                                   </div>
                                   <button
@@ -1897,21 +1897,21 @@ const PasswordManager = () => {
                               )}
 
                               {item.notes && (
-                                <div className="rounded-xl border border-white/8 bg-black/10 px-3 py-2.5 md:col-span-2">
-                                  <p className="text-[10px] font-semibold uppercase tracking-[0.24em] text-[var(--text-muted)]">Notas</p>
+                                <div className="rounded-xl border border-white/6 bg-black/8 px-3 py-2.5 md:col-span-2">
+                                  <p className="text-[9px] font-semibold uppercase tracking-[0.18em] text-[var(--text-muted)]">Notas</p>
                                   <p className="mt-1 text-xs leading-relaxed text-[var(--text)] whitespace-pre-wrap">{item.notes}</p>
                                 </div>
                               )}
                             </div>
 
-                            <div className="mt-3 flex items-center justify-center gap-2">
+                            <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-center">
                               <button
                                 type="button"
                                 onClick={(e) => {
                                   e.stopPropagation();
                                   handleOpenModal(item);
                                 }}
-                                className="inline-flex items-center gap-1.5 rounded-full border border-white/8 bg-white/5 px-3.5 py-1.5 text-[11px] font-medium text-[var(--text-muted)] transition-colors hover:border-[var(--primary)] hover:text-[var(--primary)]"
+                                className="inline-flex items-center justify-center gap-1.5 rounded-full border border-white/8 bg-white/5 px-3.5 py-1.75 text-[11px] font-medium text-[var(--text-muted)] transition-colors hover:border-[var(--primary)] hover:text-[var(--primary)] sm:min-w-[92px]"
                                 title="Editar"
                               >
                                 <Edit size={14} />
@@ -1923,7 +1923,7 @@ const PasswordManager = () => {
                                   e.stopPropagation();
                                   handleDelete(item.id);
                                 }}
-                                className="inline-flex items-center gap-1.5 rounded-full border border-white/8 bg-white/5 px-3.5 py-1.5 text-[11px] font-medium text-[var(--text-muted)] transition-colors hover:border-[var(--danger)] hover:text-[var(--danger)]"
+                                className="inline-flex items-center justify-center gap-1.5 rounded-full border border-white/8 bg-white/5 px-3.5 py-1.75 text-[11px] font-medium text-[var(--text-muted)] transition-colors hover:border-[var(--danger)] hover:text-[var(--danger)] sm:min-w-[92px]"
                                 title="Apagar"
                               >
                                 <Trash size={14} />
