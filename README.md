@@ -82,6 +82,44 @@ Optional icon for Unraid:
 - `/container-icon.png`
 - use it as the container icon URL if your Unraid template allows a custom icon URL/path
 
+## Android APK
+
+The frontend is now wrapped with Capacitor so you can build an Android app without changing the web logic.
+
+Current setup:
+- Capacitor project lives in [`frontend/android`](./frontend/android)
+- web assets are copied from [`frontend/dist`](./frontend/dist)
+- the generated debug APK is at:
+  - [`frontend/android/app/build/outputs/apk/debug/app-debug.apk`](./frontend/android/app/build/outputs/apk/debug/app-debug.apk)
+
+To refresh the Android project after web changes:
+
+```bash
+cd frontend
+npm run build
+JAVA_HOME=/opt/homebrew/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home \
+ANDROID_HOME=$HOME/Library/Android/sdk \
+ANDROID_SDK_ROOT=$HOME/Library/Android/sdk \
+PATH=/opt/homebrew/opt/openjdk@21/bin:$PATH \
+npx cap sync android
+```
+
+To rebuild the debug APK:
+
+```bash
+cd frontend/android
+JAVA_HOME=/opt/homebrew/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home \
+ANDROID_HOME=$HOME/Library/Android/sdk \
+ANDROID_SDK_ROOT=$HOME/Library/Android/sdk \
+PATH=/opt/homebrew/opt/openjdk@21/bin:$PATH \
+./gradlew assembleDebug
+```
+
+Notes:
+- this keeps the web app unchanged
+- passkeys/biometrics may behave differently inside Android WebView and may need a follow-up pass
+- if you want a Play Store build later, we should switch from debug APK to a signed release build
+
 ## Files of interest
 
 - [`backend/server.js`](./backend/server.js)

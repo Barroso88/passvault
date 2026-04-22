@@ -1,0 +1,9 @@
+{
+  "appId": "com.barroso88.passvault",
+  "appName": "PassVault",
+  "webDir": "dist",
+  "bundledWebRuntime": false,
+  "android": {
+    "allowMixedContent": false
+  }
+}
