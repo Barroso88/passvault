@@ -1428,7 +1428,7 @@ const PasswordManager = () => {
   const { passwords, setPasswords, cards, categories, setCategories, syncVault, t, copyToClipboard, showToast } = useContext(AppContext);
   const [search, setSearch] = useState('');
   const [selectedCategory, setSelectedCategory] = useState(null);
-  const [expandedItemId, setExpandedItemId] = useState(null);
+  const [detailItem, setDetailItem] = useState(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingItem, setEditingItem] = useState(null);
 
@@ -1464,8 +1464,9 @@ const PasswordManager = () => {
   }, [passwords, search, selectedCategory]);
 
   useEffect(() => {
-    setExpandedItemId(null);
+    setDetailItem(null);
   }, [selectedCategory]);
+
 
   const handleOpenModal = (item = null) => {
     if (item) {
@@ -1809,7 +1810,7 @@ const PasswordManager = () => {
                     >
                       <button
                         type="button"
-                        onClick={() => setExpandedItemId(expandedItemId === item.id ? null : item.id)}
+                        onClick={() => setDetailItem(item)}
                         className="flex min-w-0 items-center gap-3 text-left sm:pr-4"
                       >
                         <div className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden">
@@ -1836,90 +1837,11 @@ const PasswordManager = () => {
                           </p>
                         </div>
 
-                        <ChevronDown
+                        <ChevronRight
                           size={15}
-                          className={`shrink-0 text-[var(--text-muted)] transition-transform duration-200 ${expandedItemId === item.id ? 'rotate-180' : ''}`}
+                          className="shrink-0 text-[var(--text-muted)] transition-transform duration-200 group-hover:translate-x-0.5"
                         />
                       </button>
-                      {expandedItemId === item.id && (
-                        <div className="pt-0">
-                          <div className="grid gap-2 px-3 py-3 sm:px-4 md:grid-cols-[minmax(0,1fr)_minmax(0,1.25fr)]">
-                            <div className="flex min-w-0 items-center gap-2 rounded-full border border-white/6 bg-black/10 px-3 py-2">
-                              <span className="text-[9px] font-semibold uppercase tracking-[0.18em] text-[var(--text-muted)]">User</span>
-                              <span className="min-w-0 flex-1 truncate text-sm text-[var(--text)]">{item.username || '—'}</span>
-                              <button
-                                type="button"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  copyToClipboard(item.username);
-                                }}
-                                className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-white/8 bg-white/5 text-[var(--text-muted)] transition-colors hover:border-[var(--primary)] hover:text-[var(--primary)]"
-                                title="Copiar utilizador"
-                              >
-                                <Copy size={13} />
-                              </button>
-                            </div>
-
-                            <div className="flex min-w-0 items-center gap-2 rounded-full border border-[var(--primary)]/20 bg-[linear-gradient(135deg,rgba(124,92,255,0.14),rgba(255,255,255,0.03))] px-3 py-2 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]">
-                              <span className="text-[9px] font-semibold uppercase tracking-[0.18em] text-[var(--primary)]/90">Pass</span>
-                              <div className="min-w-0 flex-1 overflow-hidden">
-                                <SecretText
-                                  text={item.password}
-                                  showCopy={false}
-                                  containerClassName="space-x-2"
-                                  textClassName="truncate text-sm font-semibold tracking-[0.16em] text-[var(--text)]"
-                                  toggleClassName="rounded-full border border-[var(--primary)]/20 bg-black/10 p-1.5 text-[var(--primary)] hover:bg-[var(--primary)]/12"
-                                />
-                              </div>
-                              <button
-                                type="button"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  copyToClipboard(item.password);
-                                }}
-                                className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-[var(--primary)]/20 bg-black/10 text-[var(--primary)] transition-colors hover:border-[var(--primary)] hover:bg-[var(--primary)]/12"
-                                title="Copiar password"
-                              >
-                                <Key size={13} />
-                              </button>
-                            </div>
-
-                            {item.notes && (
-                              <div className="md:col-span-2 px-1 py-1">
-                                <span className="mr-2 text-[9px] font-semibold uppercase tracking-[0.18em] text-[var(--text-muted)]">Notas</span>
-                                <span className="truncate text-sm text-[var(--text)]">{item.notes}</span>
-                              </div>
-                            )}
-
-                            <div className="ml-auto flex items-center gap-2">
-                              <button
-                                type="button"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  handleOpenModal(item);
-                                }}
-                                className="inline-flex items-center justify-center gap-1.5 rounded-full border border-white/8 bg-white/5 px-4 py-2 text-[11px] font-medium text-[var(--text-muted)] transition-colors hover:border-[var(--primary)] hover:text-[var(--primary)]"
-                                title="Editar"
-                              >
-                                <Edit size={14} />
-                                <span>Editar</span>
-                              </button>
-                              <button
-                                type="button"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  handleDelete(item.id);
-                                }}
-                                className="inline-flex items-center justify-center gap-1.5 rounded-full border border-white/8 bg-white/5 px-4 py-2 text-[11px] font-medium text-[var(--text-muted)] transition-colors hover:border-[var(--danger)] hover:text-[var(--danger)]"
-                                title="Apagar"
-                              >
-                                <Trash size={14} />
-                                <span>Apagar</span>
-                              </button>
-                            </div>
-                          </div>
-                        </div>
-                      )}
                     </div>
                   ))}
                 </div>
@@ -1927,6 +1849,101 @@ const PasswordManager = () => {
             </div>
           </div>
         )}
+
+      <Modal isOpen={!!detailItem} onClose={() => setDetailItem(null)} title={detailItem?.title || t('passwords')}>
+        {detailItem && (
+          <div className="space-y-4">
+            <div className="flex items-center gap-3">
+              <div className="flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-2xl border border-white/8 bg-black/15">
+                <img
+                  src={getFavicon(detailItem.url)}
+                  alt=""
+                  className="h-7 w-7 object-contain"
+                  onError={(e) => { e.target.style.display='none'; e.target.nextSibling.style.display='flex'; }}
+                />
+                <div className="hidden h-12 w-12 items-center justify-center text-sm font-black text-white/90">
+                  {detailItem.title.charAt(0)}
+                </div>
+              </div>
+              <div className="min-w-0">
+                <h3 className="truncate text-lg font-semibold text-[var(--text)]">{detailItem.title}</h3>
+                <p className="truncate text-sm text-[var(--text-muted)]">{selectedCategory}</p>
+              </div>
+            </div>
+
+            <div className="space-y-3">
+              <div className="flex items-center gap-3 rounded-2xl border border-white/8 bg-black/10 px-3 py-3">
+                <div className="min-w-0 flex-1">
+                  <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-[var(--text-muted)]">User</p>
+                  <p className="mt-1 truncate text-sm text-[var(--text)]">{detailItem.username || '—'}</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => copyToClipboard(detailItem.username)}
+                  className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-white/8 bg-white/5 text-[var(--text-muted)] transition-colors hover:border-[var(--primary)] hover:text-[var(--primary)]"
+                  title="Copiar utilizador"
+                >
+                  <Copy size={13} />
+                </button>
+              </div>
+
+              <div className="flex items-center gap-3 rounded-2xl border border-[var(--primary)]/20 bg-[linear-gradient(135deg,rgba(124,92,255,0.14),rgba(255,255,255,0.03))] px-3 py-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]">
+                <div className="min-w-0 flex-1">
+                  <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-[var(--primary)]/90">Password</p>
+                  <div className="mt-1">
+                    <SecretText
+                      text={detailItem.password}
+                      showCopy={false}
+                      textClassName="truncate text-sm font-semibold tracking-[0.16em] text-[var(--text)]"
+                      toggleClassName="rounded-full border border-[var(--primary)]/20 bg-black/10 p-1.5 text-[var(--primary)] hover:bg-[var(--primary)]/12"
+                    />
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => copyToClipboard(detailItem.password)}
+                  className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-[var(--primary)]/20 bg-black/10 text-[var(--primary)] transition-colors hover:border-[var(--primary)] hover:bg-[var(--primary)]/12"
+                  title="Copiar password"
+                >
+                  <Key size={13} />
+                </button>
+              </div>
+
+              {detailItem.notes && (
+                <div className="rounded-2xl border border-white/8 bg-black/8 px-3 py-3">
+                  <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-[var(--text-muted)]">Notas</p>
+                  <p className="mt-1 text-sm leading-relaxed text-[var(--text)] whitespace-pre-wrap">{detailItem.notes}</p>
+                </div>
+              )}
+
+              <div className="flex flex-col gap-2 pt-1 sm:flex-row">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setDetailItem(null);
+                    handleOpenModal(detailItem);
+                  }}
+                  className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-full border border-white/8 bg-white/5 px-4 py-2 text-[11px] font-medium text-[var(--text-muted)] transition-colors hover:border-[var(--primary)] hover:text-[var(--primary)]"
+                >
+                  <Edit size={14} />
+                  <span>Editar</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setDetailItem(null);
+                    handleDelete(detailItem.id);
+                  }}
+                  className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-full border border-white/8 bg-white/5 px-4 py-2 text-[11px] font-medium text-[var(--text-muted)] transition-colors hover:border-[var(--danger)] hover:text-[var(--danger)]"
+                >
+                  <Trash size={14} />
+                  <span>Apagar</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+      </Modal>
 
       <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title={editingItem ? t('edit') : t('addPassword')}>
         <form onSubmit={handleSave} className="space-y-4">
