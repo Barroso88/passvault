@@ -367,6 +367,14 @@ const getCategoryStyle = (category) => {
 
 const getCategoryName = (category) => (typeof category === 'string' ? category : category?.name || '');
 const isSystemCategory = (name) => name === 'Other';
+const sortCategoriesForDisplay = (input = []) => normalizeCategories(input).slice().sort((a, b) => {
+  const aSystem = isSystemCategory(a.name);
+  const bSystem = isSystemCategory(b.name);
+  if (aSystem && bSystem) return 0;
+  if (aSystem) return 1;
+  if (bSystem) return -1;
+  return a.name.localeCompare(b.name, undefined, { sensitivity: 'base' });
+});
 const PREVIEW_PASSWORDS = [
   {
     id: 'demo-1',
@@ -1433,7 +1441,7 @@ const PasswordManager = () => {
   const [aiFallbackNotice, setAiFallbackNotice] = useState('');
 
   const categoryOptions = useMemo(
-    () => categories.map(getCategoryName).filter(name => name),
+    () => sortCategoriesForDisplay(categories).map(getCategoryName).filter(name => name),
     [categories]
   );
 
@@ -1639,7 +1647,7 @@ const PasswordManager = () => {
     return passwords.filter(p => p.category === cat).length;
   };
 
-  const orderedCategories = useMemo(() => normalizeCategories(categories), [categories]);
+  const orderedCategories = useMemo(() => sortCategoriesForDisplay(categories), [categories]);
 
   return (
     <div className="relative h-full overflow-hidden rounded-[32px] border border-[var(--border)] bg-[var(--surface)]/90 shadow-[0_30px_80px_-36px_rgba(0,0,0,0.55)]">
@@ -1959,7 +1967,7 @@ const PasswordManager = () => {
                 {isGeneratingInfo ? <Loader2 size={12} className="animate-spin mr-1"/> : <Sparkles size={12} className="mr-1"/>}
                 {t('smartFill')}
               </button>
-              <select value={form.category} onChange={e => setForm({...form, category: e.target.value})} className="bg-transparent text-sm text-[var(--text)] border border-[var(--border)] rounded-lg p-1 outline-none">
+            <select value={form.category} onChange={e => setForm({...form, category: e.target.value})} className="bg-transparent text-sm text-[var(--text)] border border-[var(--border)] rounded-lg p-1 outline-none">
                 {categoryOptions.map(c => <option key={c} value={c}>{c}</option>)}
               </select>
             </div>
@@ -2227,9 +2235,9 @@ const GlobalQuickCreateModals = () => {
           <div>
             <label className="text-sm font-medium text-[var(--text-muted)] mb-2 block">{t('category')}</label>
             <select value={passwordForm.category} onChange={e => setPasswordForm({...passwordForm, category: e.target.value})} className="w-full bg-transparent text-sm text-[var(--text)] border border-[var(--border)] rounded-lg p-2 outline-none">
-              {categories.map(cat => <option key={cat.name} value={cat.name}>{cat.name}</option>)}
-            </select>
-          </div>
+                {sortCategoriesForDisplay(categories).map(cat => <option key={cat.name} value={cat.name}>{cat.name}</option>)}
+              </select>
+            </div>
 
           <div className="flex space-x-3 pt-4">
             <Button type="button" variant="secondary" onClick={() => setQuickCreate(null)} className="flex-1">{t('cancel')}</Button>
@@ -2350,9 +2358,9 @@ const GlobalQuickEditModals = () => {
             <Input label={t('password')} type="password" value={passwordForm.password} onChange={e => setPasswordForm({...passwordForm, password: e.target.value})} required />
             <Input label={t('notes')} value={passwordForm.notes} onChange={e => setPasswordForm({...passwordForm, notes: e.target.value})} />
             <div>
-              <label className="text-sm font-medium text-[var(--text-muted)] mb-2 block">{t('category')}</label>
-              <select value={passwordForm.category} onChange={e => setPasswordForm({...passwordForm, category: e.target.value})} className="w-full bg-transparent text-sm text-[var(--text)] border border-[var(--border)] rounded-lg p-2 outline-none">
-                {categories.map(cat => <option key={cat.name} value={cat.name}>{cat.name}</option>)}
+            <label className="text-sm font-medium text-[var(--text-muted)] mb-2 block">{t('category')}</label>
+            <select value={passwordForm.category} onChange={e => setPasswordForm({...passwordForm, category: e.target.value})} className="w-full bg-transparent text-sm text-[var(--text)] border border-[var(--border)] rounded-lg p-2 outline-none">
+                {sortCategoriesForDisplay(categories).map(cat => <option key={cat.name} value={cat.name}>{cat.name}</option>)}
               </select>
             </div>
             <div className="flex items-center justify-between">
