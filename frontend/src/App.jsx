@@ -1555,15 +1555,15 @@ const PasswordManager = () => {
         showToast('Já existe uma pasta com esse nome.');
         return;
       }
-      setCategories(prev => prev.map(cat => {
+      const nextCategories = normalizeCategories(categories.map(cat => {
         if (cat.name !== editingCategory.name) return cat;
         return { ...cat, name: trimmed };
       }));
+      setCategories(nextCategories);
       setPasswords(prev => prev.map(p => p.category === editingCategory.name ? { ...p, category: trimmed } : p));
       if (selectedCategory === editingCategory.name) {
         setSelectedCategory(trimmed);
       }
-      const nextCategories = categories.map(cat => cat.name === editingCategory.name ? { ...cat, name: trimmed } : cat);
       const nextPasswords = passwords.map(p => p.category === editingCategory.name ? { ...p, category: trimmed } : p);
       persistVault(nextCategories, nextPasswords).catch(error => {
         showToast('Não foi possível gravar a alteração da pasta.');
@@ -1578,7 +1578,7 @@ const PasswordManager = () => {
           .map((cat) => Number(cat.order) || 0)
       );
       const nextOrder = Math.min(highestNonSystemOrder + 1, otherOrder - 1);
-      const nextCategories = [...categories, { name: trimmed, order: nextOrder }];
+      const nextCategories = normalizeCategories([...categories, { name: trimmed, order: nextOrder }]);
       setCategories(nextCategories);
       setSelectedCategory(trimmed);
       persistVault(nextCategories, passwords).catch(error => {
@@ -1608,7 +1608,7 @@ const PasswordManager = () => {
     if (!window.confirm(`Apagar a pasta "${categoryName}"? As passwords serão movidas para "${fallbackCategory}".`)) return;
 
     const nextPasswords = passwords.map(p => p.category === categoryName ? { ...p, category: fallbackCategory } : p);
-    const nextCategories = categories.filter(cat => cat.name !== categoryName);
+    const nextCategories = normalizeCategories(categories.filter(cat => cat.name !== categoryName));
 
     setPasswords(nextPasswords);
     setCategories(nextCategories);
@@ -1634,6 +1634,8 @@ const PasswordManager = () => {
   const getCatCount = (cat) => {
     return passwords.filter(p => p.category === cat).length;
   };
+
+  const orderedCategories = useMemo(() => normalizeCategories(categories), [categories]);
 
   return (
     <div className="relative h-full overflow-hidden rounded-[32px] border border-[var(--border)] bg-[var(--surface)]/90 shadow-[0_30px_80px_-36px_rgba(0,0,0,0.55)]">
@@ -1662,7 +1664,7 @@ const PasswordManager = () => {
             </div>
 
             <div className="mx-auto w-full max-w-2xl space-y-2.5">
-              {categories.map(cat => (
+              {orderedCategories.map(cat => (
                 <div
                   key={cat.name}
                   role="button"
