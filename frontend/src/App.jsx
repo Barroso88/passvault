@@ -346,11 +346,14 @@ const normalizeCategories = (input = []) => {
     normalized.push({ name: 'Other', order: normalized.length + 1000 });
   }
 
+  const otherOrder = normalized.find((cat) => cat.name === 'Other')?.order ?? (normalized.length + 1000);
   return normalized
     .sort((a, b) => a.order - b.order)
     .map((cat, index) => ({
       name: cat.name,
-      order: Number.isFinite(cat.order) ? cat.order : index,
+      order: cat.name === 'Other'
+        ? otherOrder
+        : (Number.isFinite(cat.order) ? Math.min(cat.order, otherOrder - 1) : index),
     }));
 };
 
@@ -1567,7 +1570,14 @@ const PasswordManager = () => {
         console.error(error);
       });
     } else if (!categories.some(cat => cat.name.toLowerCase() === trimmed.toLowerCase())) {
-      const nextOrder = Math.max(-1, ...categories.map(cat => Number(cat.order) || 0)) + 1;
+      const otherOrder = categories.find((cat) => isSystemCategory(cat.name))?.order ?? (categories.length + 1000);
+      const highestNonSystemOrder = Math.max(
+        -1,
+        ...categories
+          .filter((cat) => !isSystemCategory(cat.name))
+          .map((cat) => Number(cat.order) || 0)
+      );
+      const nextOrder = Math.min(highestNonSystemOrder + 1, otherOrder - 1);
       const nextCategories = [...categories, { name: trimmed, order: nextOrder }];
       setCategories(nextCategories);
       setSelectedCategory(trimmed);
@@ -1590,7 +1600,7 @@ const PasswordManager = () => {
       showToast('Precisas de manter pelo menos uma pasta.');
       return;
     }
-    const fallbackCategory = categories.find(cat => cat.name !== categoryName)?.name;
+    const fallbackCategory = categories.find(cat => cat.name !== categoryName && !isSystemCategory(cat.name))?.name || categories.find(cat => cat.name !== categoryName)?.name;
     if (!fallbackCategory) {
       showToast('Não foi possível escolher uma pasta destino.');
       return;
