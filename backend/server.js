@@ -512,7 +512,11 @@ app.post('/api/passkeys/login/options', async (req, res) => {
                 prfSalt: cred.prfSalt,
                 wrappedVaultKey: cred.wrappedVaultKey,
                 wrappedMasterHash: cred.wrappedMasterHash,
+                publicKey: cred.publicKey || null,
+                counter: getCredentialCounter(cred),
                 transports: cred.transports || [],
+                credentialDeviceType: cred.credentialDeviceType || null,
+                credentialBackedUp: cred.credentialBackedUp || null,
             })),
         });
     } catch (err) {
@@ -521,7 +525,7 @@ app.post('/api/passkeys/login/options', async (req, res) => {
 });
 
 app.post('/api/passkeys/login/verify', async (req, res) => {
-    const { response } = req.body || {};
+    const { response, credentialPublicKey } = req.body || {};
     try {
         const vault = await loadVault();
         const credentials = getCredentials(vault);
@@ -534,7 +538,8 @@ app.post('/api/passkeys/login/verify', async (req, res) => {
         if (!credential) {
             return res.status(404).json({ error: 'Credencial biométrica não encontrada.' });
         }
-        if (!credential.publicKey) {
+        const publicKey = credential.publicKey || credentialPublicKey;
+        if (!publicKey) {
             return res.status(500).json({ error: 'A credencial biométrica está incompleta.' });
         }
 
@@ -545,7 +550,7 @@ app.post('/api/passkeys/login/verify', async (req, res) => {
             expectedRPID: WEBAUTHN_RP_ID,
             credential: {
                 id: credential.id,
-                publicKey: fromBase64Url(credential.publicKey),
+                publicKey: fromBase64Url(publicKey),
                 counter: getCredentialCounter(credential),
             },
         });

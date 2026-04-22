@@ -609,6 +609,38 @@ const buildPrfExtensionsForSalt = (prfSalt) => {
   };
 };
 
+const mergePasskeyCredential = (base = {}, extra = {}) => {
+  const merged = { ...base };
+  const fallback = extra || {};
+  if (!merged.publicKey && fallback.publicKey) merged.publicKey = fallback.publicKey;
+  if (typeof merged.counter !== 'number' && typeof fallback.counter === 'number') merged.counter = fallback.counter;
+  if (!merged.credentialDeviceType && fallback.credentialDeviceType) merged.credentialDeviceType = fallback.credentialDeviceType;
+  if (typeof merged.credentialBackedUp === 'undefined' && typeof fallback.credentialBackedUp !== 'undefined') {
+    merged.credentialBackedUp = fallback.credentialBackedUp;
+  }
+  return merged;
+};
+
+const mergePasskeyCredentialLists = (primary = [], secondary = []) => {
+  const secondaryMap = new Map((Array.isArray(secondary) ? secondary : []).map((cred) => [cred?.id, cred]));
+  const result = [];
+  const seen = new Set();
+
+  (Array.isArray(primary) ? primary : []).forEach((cred) => {
+    if (!cred?.id) return;
+    const merged = mergePasskeyCredential(cred, secondaryMap.get(cred.id));
+    result.push(merged);
+    seen.add(cred.id);
+  });
+
+  (Array.isArray(secondary) ? secondary : []).forEach((cred) => {
+    if (!cred?.id || seen.has(cred.id)) return;
+    result.push({ ...cred });
+  });
+
+  return result;
+};
+
 const importPasskeyDerivedKey = async (prfBytes) => {
   const bytes = normalizeBufferSource(prfBytes);
   if (!bytes) {
@@ -1075,8 +1107,13 @@ const AuthScreen = () => {
         const nextHasPasskeys = typeof passkeyStatus.hasPasskeys === 'boolean'
           ? passkeyStatus.hasPasskeys
           : !!vaultStatus.hasPasskeys;
-        setHasPasskeys(nextHasPasskeys);
-        setPasskeyCredentials(Array.isArray(passkeyStatus.credentials) ? passkeyStatus.credentials : []);
+        const storedPasskeys = readStoredState(PASSKEY_STORAGE_KEYS.credentials, []);
+        const nextPasskeys = mergePasskeyCredentialLists(
+          Array.isArray(passkeyStatus.credentials) ? passkeyStatus.credentials : [],
+          storedPasskeys,
+        );
+        setHasPasskeys(nextHasPasskeys || nextPasskeys.length > 0);
+        setPasskeyCredentials(nextPasskeys);
         setIsLoading(false);
       })
       .catch((err) => {
@@ -1264,16 +1301,17 @@ const AuthScreen = () => {
 
       const payload = await optionsRes.json();
       const credentials = payload.credentials || [];
+      const mergedCredentials = mergePasskeyCredentialLists(credentials, passkeyCredentials);
       const options = {
         ...payload.options,
         extensions: {
           ...(payload.options?.extensions || {}),
-          ...(buildPrfExtensionsForCredentials(credentials) || {}),
+          ...(buildPrfExtensionsForCredentials(mergedCredentials) || {}),
         },
       };
 
       const authenticationResponse = await startAuthentication({ optionsJSON: options });
-      const credential = credentials.find((item) => item.id === authenticationResponse.id);
+      const credential = mergedCredentials.find((item) => item.id === authenticationResponse.id);
       const prfSeed = authenticationResponse.clientExtensionResults?.prf?.results?.first;
 
       if (!credential) {
@@ -1294,7 +1332,10 @@ const AuthScreen = () => {
       const verifyRes = await fetch(`${API_URL}/passkeys/login/verify`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ response: authenticationResponse })
+        body: JSON.stringify({
+          response: authenticationResponse,
+          credentialPublicKey: credential.publicKey || null,
+        })
       });
 
       if (!verifyRes.ok) {
@@ -1303,7 +1344,7 @@ const AuthScreen = () => {
       }
 
       await loadVaultData(masterHashValue, vaultKeyMaterial.key, vaultKeyRaw);
-      setPasskeyCredentials(credentials);
+      setPasskeyCredentials(mergedCredentials);
       setHasPasskeys(true);
     } catch (err) {
       setError(err.message || 'Não foi possível iniciar o login biométrico.');
