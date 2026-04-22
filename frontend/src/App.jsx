@@ -1836,92 +1836,100 @@ const PasswordManager = () => {
 
                       {expandedItemId === item.id && (
                         <div className="border-t border-white/8 pt-3">
-                          <div className="grid gap-2.5 sm:grid-cols-2 xl:grid-cols-4">
-                            <div className="flex items-center gap-2.5">
-                              <span className="text-[10px] font-semibold uppercase tracking-[0.24em] text-[var(--text-muted)]">Utilizador</span>
-                              <button
-                                type="button"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  copyToClipboard(item.username);
-                                }}
-                                className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-white/8 bg-white/5 text-[var(--text-muted)] transition-colors hover:border-[var(--primary)] hover:text-[var(--primary)]"
-                                title="Copiar utilizador"
-                              >
-                                <Copy size={13} />
-                              </button>
-                              <span className="min-w-0 truncate text-xs text-[var(--text)]">{item.username || '—'}</span>
-                            </div>
-
-                            <div className="flex items-center gap-2.5">
-                              <span className="text-[10px] font-semibold uppercase tracking-[0.24em] text-[var(--text-muted)]">Password</span>
-                              <button
-                                type="button"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  copyToClipboard(item.password);
-                                }}
-                                className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-white/8 bg-white/5 text-[var(--text-muted)] transition-colors hover:border-[var(--primary)] hover:text-[var(--primary)]"
-                                title="Copiar password"
-                              >
-                                <Key size={13} />
-                              </button>
-                              <span className="min-w-0 truncate text-xs text-[var(--text)]">
-                                <SecretText text={item.password} showCopy={false} />
-                              </span>
-                            </div>
-
-                            {item.url && (
-                              <div className="flex items-center gap-2.5">
-                                <span className="text-[10px] font-semibold uppercase tracking-[0.24em] text-[var(--text-muted)]">URL</span>
+                          <div className="rounded-2xl border border-white/8 bg-white/[0.03] p-3 sm:p-4">
+                            <div className="grid gap-2.5 md:grid-cols-2">
+                              <div className="flex items-center gap-3 rounded-xl border border-white/8 bg-black/10 px-3 py-2.5">
+                                <div className="min-w-0 flex-1">
+                                  <p className="text-[10px] font-semibold uppercase tracking-[0.24em] text-[var(--text-muted)]">Utilizador</p>
+                                  <p className="mt-1 truncate text-xs text-[var(--text)]">{item.username || '—'}</p>
+                                </div>
                                 <button
                                   type="button"
                                   onClick={(e) => {
                                     e.stopPropagation();
-                                    copyToClipboard(item.url);
+                                    copyToClipboard(item.username);
                                   }}
-                                  className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-white/8 bg-white/5 text-[var(--text-muted)] transition-colors hover:border-[var(--primary)] hover:text-[var(--primary)]"
-                                  title="Copiar URL"
+                                  className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-white/8 bg-white/5 text-[var(--text-muted)] transition-colors hover:border-[var(--primary)] hover:text-[var(--primary)]"
+                                  title="Copiar utilizador"
                                 >
-                                  <Globe size={13} />
+                                  <Copy size={13} />
                                 </button>
-                                <span className="min-w-0 truncate text-xs text-[var(--text)]">{item.url}</span>
                               </div>
-                            )}
 
-                            {item.notes && (
-                              <div className="flex items-center gap-2.5">
-                                <span className="text-[10px] font-semibold uppercase tracking-[0.24em] text-[var(--text-muted)]">Notas</span>
-                                <span className="min-w-0 truncate text-xs text-[var(--text)]">{item.notes}</span>
+                              <div className="flex items-center gap-3 rounded-xl border border-white/8 bg-black/10 px-3 py-2.5">
+                                <div className="min-w-0 flex-1">
+                                  <p className="text-[10px] font-semibold uppercase tracking-[0.24em] text-[var(--text-muted)]">Password</p>
+                                  <p className="mt-1 truncate text-xs text-[var(--text)]">
+                                    <SecretText text={item.password} showCopy={false} />
+                                  </p>
+                                </div>
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    copyToClipboard(item.password);
+                                  }}
+                                  className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-white/8 bg-white/5 text-[var(--text-muted)] transition-colors hover:border-[var(--primary)] hover:text-[var(--primary)]"
+                                  title="Copiar password"
+                                >
+                                  <Key size={13} />
+                                </button>
                               </div>
-                            )}
-                          </div>
 
-                          <div className="mt-3 flex items-center justify-center gap-2">
-                            <button
-                              type="button"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleOpenModal(item);
-                              }}
-                              className="inline-flex items-center gap-1.5 rounded-full border border-white/8 bg-white/5 px-3.5 py-1.5 text-[11px] font-medium text-[var(--text-muted)] transition-colors hover:border-[var(--primary)] hover:text-[var(--primary)]"
-                              title="Editar"
-                            >
-                              <Edit size={14} />
-                              <span>Editar</span>
-                            </button>
-                            <button
-                              type="button"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleDelete(item.id);
-                              }}
-                              className="inline-flex items-center gap-1.5 rounded-full border border-white/8 bg-white/5 px-3.5 py-1.5 text-[11px] font-medium text-[var(--text-muted)] transition-colors hover:border-[var(--danger)] hover:text-[var(--danger)]"
-                              title="Apagar"
-                            >
-                              <Trash size={14} />
-                              <span>Apagar</span>
-                            </button>
+                              {item.url && (
+                                <div className="flex items-center gap-3 rounded-xl border border-white/8 bg-black/10 px-3 py-2.5 md:col-span-2">
+                                  <div className="min-w-0 flex-1">
+                                    <p className="text-[10px] font-semibold uppercase tracking-[0.24em] text-[var(--text-muted)]">URL</p>
+                                    <p className="mt-1 truncate text-xs text-[var(--text)]">{item.url}</p>
+                                  </div>
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      copyToClipboard(item.url);
+                                    }}
+                                    className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-white/8 bg-white/5 text-[var(--text-muted)] transition-colors hover:border-[var(--primary)] hover:text-[var(--primary)]"
+                                    title="Copiar URL"
+                                  >
+                                    <Globe size={13} />
+                                  </button>
+                                </div>
+                              )}
+
+                              {item.notes && (
+                                <div className="rounded-xl border border-white/8 bg-black/10 px-3 py-2.5 md:col-span-2">
+                                  <p className="text-[10px] font-semibold uppercase tracking-[0.24em] text-[var(--text-muted)]">Notas</p>
+                                  <p className="mt-1 text-xs leading-relaxed text-[var(--text)] whitespace-pre-wrap">{item.notes}</p>
+                                </div>
+                              )}
+                            </div>
+
+                            <div className="mt-3 flex items-center justify-center gap-2">
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleOpenModal(item);
+                                }}
+                                className="inline-flex items-center gap-1.5 rounded-full border border-white/8 bg-white/5 px-3.5 py-1.5 text-[11px] font-medium text-[var(--text-muted)] transition-colors hover:border-[var(--primary)] hover:text-[var(--primary)]"
+                                title="Editar"
+                              >
+                                <Edit size={14} />
+                                <span>Editar</span>
+                              </button>
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleDelete(item.id);
+                                }}
+                                className="inline-flex items-center gap-1.5 rounded-full border border-white/8 bg-white/5 px-3.5 py-1.5 text-[11px] font-medium text-[var(--text-muted)] transition-colors hover:border-[var(--danger)] hover:text-[var(--danger)]"
+                                title="Apagar"
+                              >
+                                <Trash size={14} />
+                                <span>Apagar</span>
+                              </button>
+                            </div>
                           </div>
                         </div>
                       )}
