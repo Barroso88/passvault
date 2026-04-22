@@ -1683,7 +1683,7 @@ const PasswordManager = () => {
 
   return (
     <div className="relative h-full overflow-hidden bg-transparent">
-      <div className="relative h-full flex flex-col p-4 sm:p-6 lg:p-8">
+      <div className="relative h-full flex flex-col p-3 sm:p-6 lg:p-8">
         <div className="mx-auto flex w-full max-w-4xl flex-col items-center text-center">
           <h1 className="mt-2 text-2xl font-black tracking-tight text-[var(--text)] sm:mt-4 sm:text-4xl">
             {t('passwords')}
@@ -1729,7 +1729,7 @@ const PasswordManager = () => {
                         />
                         <div className="min-w-0">
                           <div className="flex min-w-0 items-center gap-2">
-                            <h3 className="truncate text-[14px] font-semibold tracking-wide text-white sm:text-[15px]">{cat.name}</h3>
+                            <h3 className="truncate text-[15px] font-semibold tracking-wide text-white sm:text-[15px]">{cat.name}</h3>
                             {isSystemCategory(cat.name) && (
                               <span className="rounded-full border border-white/10 bg-black/15 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-[0.18em] text-white/70">
                                 Sistema
