@@ -1841,150 +1841,103 @@ const PasswordManager = () => {
                           className={`shrink-0 text-[var(--text-muted)] transition-transform duration-200 ${expandedItemId === item.id ? 'rotate-180' : ''}`}
                         />
                       </button>
-
                       {expandedItemId === item.id && (
                         <div className="border-t border-white/6 pt-2.5 sm:pt-3">
-                          <div className="overflow-hidden rounded-[28px] border border-white/6 bg-[linear-gradient(180deg,rgba(255,255,255,0.045),rgba(255,255,255,0.02))] shadow-[0_18px_40px_-32px_rgba(0,0,0,0.9)]">
-                            <div className="flex items-center gap-3 border-b border-white/5 px-3 py-3 sm:px-4">
-                              <div className="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-2xl border border-white/6 bg-black/15">
+                          <div className="overflow-hidden rounded-[24px] border border-white/6 bg-[linear-gradient(180deg,rgba(255,255,255,0.035),rgba(255,255,255,0.018))] shadow-[0_12px_30px_-28px_rgba(0,0,0,0.9)]">
+                            <div className="flex flex-wrap items-center gap-3 px-3 py-3 sm:px-4">
+                              <div className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-2xl border border-white/6 bg-black/15">
                                 <img
                                   src={getFavicon(item.url)}
                                   alt=""
-                                  className="h-7 w-7 object-contain"
+                                  className="h-6 w-6 object-contain"
                                   onError={(e) => { e.target.style.display='none'; e.target.nextSibling.style.display='flex'; }}
                                 />
-                                <div className="hidden h-11 w-11 items-center justify-center text-sm font-black text-white/90">
+                                <div className="hidden h-10 w-10 items-center justify-center text-sm font-black text-white/90">
                                   {item.title.charAt(0)}
                                 </div>
                               </div>
-                              <div className="min-w-0 flex-1">
+
+                              <div className="min-w-0 flex-[1.25]">
                                 <div className="flex items-center gap-2">
-                                  <h4 className="truncate text-sm font-semibold text-[var(--text)] sm:text-base">{item.title}</h4>
+                                  <h4 className="truncate text-sm font-semibold text-[var(--text)] sm:text-[15px]">{item.title}</h4>
                                   {item.favorite && <Star size={13} className="fill-current text-yellow-500" />}
                                 </div>
-                                <p className="truncate text-xs text-[var(--text-muted)]">{item.username || '—'}</p>
+                                <p className="truncate text-xs text-[var(--text-muted)]">{selectedCategory}</p>
                               </div>
-                              <div className="hidden rounded-full border border-white/8 bg-white/5 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.24em] text-[var(--text-muted)] sm:flex">
-                                {selectedCategory}
-                              </div>
-                            </div>
 
-                            <div className="grid gap-0 lg:grid-cols-[minmax(0,1.15fr)_minmax(280px,0.85fr)]">
-                              <div className="divide-y divide-white/5 lg:border-r lg:border-white/5">
-                                <div className="flex items-start justify-between gap-3 px-3 py-3 sm:px-4">
-                                  <div className="min-w-0">
-                                    <p className="text-[9px] font-semibold uppercase tracking-[0.22em] text-[var(--text-muted)]">Utilizador</p>
-                                    <p className="mt-1 truncate text-sm text-[var(--text)]">{item.username || '—'}</p>
-                                  </div>
-                                  <button
-                                    type="button"
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      copyToClipboard(item.username);
-                                    }}
-                                    className="mt-0.5 inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-white/8 bg-white/5 text-[var(--text-muted)] transition-colors hover:border-[var(--primary)] hover:text-[var(--primary)]"
-                                    title="Copiar utilizador"
-                                  >
-                                    <Copy size={13} />
-                                  </button>
+                              <div className="flex min-w-[180px] flex-[1.05] items-center gap-2 rounded-full border border-white/6 bg-black/10 px-3 py-2">
+                                <span className="text-[9px] font-semibold uppercase tracking-[0.18em] text-[var(--text-muted)]">User</span>
+                                <span className="min-w-0 flex-1 truncate text-sm text-[var(--text)]">{item.username || '—'}</span>
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    copyToClipboard(item.username);
+                                  }}
+                                  className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-white/8 bg-white/5 text-[var(--text-muted)] transition-colors hover:border-[var(--primary)] hover:text-[var(--primary)]"
+                                  title="Copiar utilizador"
+                                >
+                                  <Copy size={13} />
+                                </button>
+                              </div>
+
+                              <div className="flex min-w-[220px] flex-[1.15] items-center gap-2 rounded-full border border-[var(--primary)]/20 bg-[linear-gradient(135deg,rgba(124,92,255,0.14),rgba(255,255,255,0.03))] px-3 py-2 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]">
+                                <span className="text-[9px] font-semibold uppercase tracking-[0.18em] text-[var(--primary)]/90">Pass</span>
+                                <div className="min-w-0 flex-1 overflow-hidden">
+                                  <SecretText
+                                    text={item.password}
+                                    showCopy={false}
+                                    containerClassName="space-x-2"
+                                    textClassName="truncate text-sm font-semibold tracking-[0.16em] text-[var(--text)]"
+                                    toggleClassName="rounded-full border border-[var(--primary)]/20 bg-black/10 p-1.5 text-[var(--primary)] hover:bg-[var(--primary)]/12"
+                                  />
                                 </div>
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    copyToClipboard(item.password);
+                                  }}
+                                  className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-[var(--primary)]/20 bg-black/10 text-[var(--primary)] transition-colors hover:border-[var(--primary)] hover:bg-[var(--primary)]/12"
+                                  title="Copiar password"
+                                >
+                                  <Key size={13} />
+                                </button>
+                              </div>
 
-                                <div className="px-3 py-3 sm:px-4">
-                                  <div className="rounded-2xl border border-[var(--primary)]/20 bg-[linear-gradient(135deg,rgba(124,92,255,0.14),rgba(255,255,255,0.03))] px-3 py-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]">
-                                    <div className="flex items-start justify-between gap-3">
-                                      <div className="min-w-0 flex-1">
-                                        <p className="text-[9px] font-semibold uppercase tracking-[0.22em] text-[var(--primary)]/90">Password</p>
-                                        <div className="mt-2 flex items-center gap-2">
-                                          <div className="min-w-0 flex-1 overflow-hidden">
-                                            <SecretText
-                                              text={item.password}
-                                              showCopy={false}
-                                              containerClassName="space-x-2"
-                                              textClassName="text-[13px] font-semibold sm:text-[15px]"
-                                              toggleClassName="rounded-full border border-[var(--primary)]/20 bg-black/10 p-1.5 text-[var(--primary)] hover:bg-[var(--primary)]/12"
-                                            />
-                                          </div>
-                                        </div>
-                                      </div>
-                                      <button
-                                        type="button"
-                                        onClick={(e) => {
-                                          e.stopPropagation();
-                                          copyToClipboard(item.password);
-                                        }}
-                                        className="mt-0.5 inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-[var(--primary)]/20 bg-black/10 text-[var(--primary)] transition-colors hover:border-[var(--primary)] hover:bg-[var(--primary)]/12"
-                                        title="Copiar password"
-                                      >
-                                        <Key size={13} />
-                                      </button>
-                                    </div>
-                                  </div>
+                              {item.notes && (
+                                <div className="flex min-w-[200px] flex-[1] items-center gap-2 rounded-full border border-white/6 bg-black/8 px-3 py-2">
+                                  <span className="text-[9px] font-semibold uppercase tracking-[0.18em] text-[var(--text-muted)]">Notas</span>
+                                  <span className="min-w-0 flex-1 truncate text-sm text-[var(--text)]">{item.notes}</span>
                                 </div>
+                              )}
+
+                              <div className="ml-auto flex items-center gap-2">
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleOpenModal(item);
+                                  }}
+                                  className="inline-flex items-center justify-center gap-1.5 rounded-full border border-white/8 bg-white/5 px-4 py-2 text-[11px] font-medium text-[var(--text-muted)] transition-colors hover:border-[var(--primary)] hover:text-[var(--primary)]"
+                                  title="Editar"
+                                >
+                                  <Edit size={14} />
+                                  <span>Editar</span>
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleDelete(item.id);
+                                  }}
+                                  className="inline-flex items-center justify-center gap-1.5 rounded-full border border-white/8 bg-white/5 px-4 py-2 text-[11px] font-medium text-[var(--text-muted)] transition-colors hover:border-[var(--danger)] hover:text-[var(--danger)]"
+                                  title="Apagar"
+                                >
+                                  <Trash size={14} />
+                                  <span>Apagar</span>
+                                </button>
                               </div>
-
-                              <div className="divide-y divide-white/5">
-                                {item.url ? (
-                                  <div className="flex items-start justify-between gap-3 px-3 py-3 sm:px-4">
-                                    <div className="min-w-0">
-                                      <p className="text-[9px] font-semibold uppercase tracking-[0.22em] text-[var(--text-muted)]">URL</p>
-                                      <p className="mt-1 truncate text-sm text-[var(--text)]">{item.url}</p>
-                                    </div>
-                                    <button
-                                      type="button"
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        copyToClipboard(item.url);
-                                      }}
-                                      className="mt-0.5 inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-white/8 bg-white/5 text-[var(--text-muted)] transition-colors hover:border-[var(--primary)] hover:text-[var(--primary)]"
-                                      title="Copiar URL"
-                                    >
-                                      <Globe size={13} />
-                                    </button>
-                                  </div>
-                                ) : (
-                                  <div className="flex items-center px-3 py-3 text-xs text-[var(--text-muted)] sm:px-4">
-                                    Sem URL associada
-                                  </div>
-                                )}
-
-                                {item.notes ? (
-                                  <div className="px-3 py-3 sm:px-4">
-                                    <p className="text-[9px] font-semibold uppercase tracking-[0.22em] text-[var(--text-muted)]">Notas</p>
-                                    <p className="mt-2 text-xs leading-relaxed text-[var(--text)] whitespace-pre-wrap">{item.notes}</p>
-                                  </div>
-                                ) : (
-                                  <div className="flex items-center px-3 py-3 text-xs text-[var(--text-muted)] sm:px-4">
-                                    Sem notas
-                                  </div>
-                                )}
-                              </div>
-                            </div>
-
-                            <div className="flex flex-col gap-2 border-t border-white/5 px-3 py-3 sm:flex-row sm:justify-end sm:px-4">
-                              <button
-                                type="button"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  handleOpenModal(item);
-                                }}
-                                className="inline-flex items-center justify-center gap-1.5 rounded-full border border-white/8 bg-white/5 px-4 py-2 text-[11px] font-medium text-[var(--text-muted)] transition-colors hover:border-[var(--primary)] hover:text-[var(--primary)] sm:min-w-[100px]"
-                                title="Editar"
-                              >
-                                <Edit size={14} />
-                                <span>Editar</span>
-                              </button>
-                              <button
-                                type="button"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  handleDelete(item.id);
-                                }}
-                                className="inline-flex items-center justify-center gap-1.5 rounded-full border border-white/8 bg-white/5 px-4 py-2 text-[11px] font-medium text-[var(--text-muted)] transition-colors hover:border-[var(--danger)] hover:text-[var(--danger)] sm:min-w-[100px]"
-                                title="Apagar"
-                              >
-                                <Trash size={14} />
-                                <span>Apagar</span>
-                              </button>
                             </div>
                           </div>
                         </div>
