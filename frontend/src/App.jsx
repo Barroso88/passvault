@@ -123,6 +123,12 @@ const TRANSLATIONS = {
     biometricsSection: 'Biometria / Passkeys',
     biometricAlreadyRegistered: 'Já existe uma passkey neste dispositivo.',
     biometricAlreadyRegisteredHint: 'Desliga a biometria existente antes de criar outra.',
+    backupSection: 'Backup e Restauro',
+    backupDescription: 'Exporta um backup encriptado no browser e restaura-o sem expor dados ao servidor.',
+    backupPassword: 'Password do backup',
+    backupPasswordPlaceholder: 'Usa uma password forte',
+    exportBackup: 'Exportar backup encriptado',
+    restoreBackup: 'Restaurar backup',
   },
   en: {
     welcome: 'Welcome to PassVault',
@@ -208,6 +214,12 @@ const TRANSLATIONS = {
     biometricsSection: 'Biometrics / Passkeys',
     biometricAlreadyRegistered: 'A passkey is already registered on this device.',
     biometricAlreadyRegisteredHint: 'Disable the existing biometrics before creating another one.',
+    backupSection: 'Backup & Restore',
+    backupDescription: 'Export an encrypted backup in the browser and restore it without exposing data to the server.',
+    backupPassword: 'Backup password',
+    backupPasswordPlaceholder: 'Use a strong password',
+    exportBackup: 'Export encrypted backup',
+    restoreBackup: 'Restore backup',
   },
   es: {
     welcome: 'Bienvenido a PassVault',
@@ -293,6 +305,12 @@ const TRANSLATIONS = {
     biometricsSection: 'Biometría / Passkeys',
     biometricAlreadyRegistered: 'Ya existe una passkey en este dispositivo.',
     biometricAlreadyRegisteredHint: 'Desactiva la biometría existente antes de crear otra.',
+    backupSection: 'Copia de seguridad y restauración',
+    backupDescription: 'Exporta una copia encriptada en el navegador y restáurala sin exponer datos al servidor.',
+    backupPassword: 'Contraseña de la copia',
+    backupPasswordPlaceholder: 'Usa una contraseña fuerte',
+    exportBackup: 'Exportar copia encriptada',
+    restoreBackup: 'Restaurar copia',
   }
 };
 
@@ -654,6 +672,69 @@ const importPasskeyDerivedKey = async (prfBytes) => {
     false,
     ['encrypt', 'decrypt']
   );
+};
+
+const deriveBackupMaterial = async (password, saltBase64) => {
+  const salt = base64ToBytes(saltBase64);
+  const passwordKey = await crypto.subtle.importKey(
+    'raw',
+    textEncoder.encode(password),
+    'PBKDF2',
+    false,
+    ['deriveBits']
+  );
+
+  const derivedBits = await crypto.subtle.deriveBits(
+    {
+      name: 'PBKDF2',
+      hash: 'SHA-256',
+      salt,
+      iterations: VAULT_KDF_ITERATIONS,
+    },
+    passwordKey,
+    256
+  );
+
+  const derivedBytes = new Uint8Array(derivedBits);
+  const key = await crypto.subtle.importKey(
+    'raw',
+    derivedBytes,
+    { name: 'AES-GCM' },
+    false,
+    ['encrypt', 'decrypt']
+  );
+
+  return { key, salt: saltBase64 };
+};
+
+const encryptBackupPayload = async (payload, password) => {
+  const salt = bytesToBase64(crypto.getRandomValues(new Uint8Array(16)));
+  const { key } = await deriveBackupMaterial(password, salt);
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const encoded = textEncoder.encode(JSON.stringify(payload));
+  const encrypted = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, key, encoded);
+
+  return {
+    v: 1,
+    kind: 'passvault-backup',
+    salt,
+    iv: bytesToBase64(iv),
+    data: bytesToBase64(new Uint8Array(encrypted)),
+  };
+};
+
+const decryptBackupPayload = async (backup, password) => {
+  if (!backup || typeof backup !== 'object' || backup.v !== 1 || backup.kind !== 'passvault-backup' || !backup.salt || !backup.iv || !backup.data) {
+    throw new Error('O ficheiro de backup é inválido.');
+  }
+
+  const { key } = await deriveBackupMaterial(password, backup.salt);
+  const plain = await crypto.subtle.decrypt(
+    { name: 'AES-GCM', iv: base64ToBytes(backup.iv) },
+    key,
+    base64ToBytes(backup.data)
+  );
+  return JSON.parse(textDecoder.decode(plain));
 };
 
 // ==========================================
@@ -2652,7 +2733,7 @@ const SettingsScreen = () => {
     timeoutMinutes, setTimeoutMinutes,
     t, showToast,
     setIsLocked, setMasterHash, setVaultKey, setVaultKeyRaw, setVaultKeyWrapMaster, setVaultSalt, setVaultVersion,
-    masterHash, vaultSalt, vaultKey, vaultKeyRaw, passwords, cards, categories,
+    masterHash, vaultSalt, vaultKey, vaultKeyRaw, passwords, setPasswords, cards, setCards, categories, setCategories,
     passkeyCredentials, setPasskeyCredentials, hasPasskeys, setHasPasskeys, syncVault,
   } = useContext(AppContext);
   const [isMasterModalOpen, setIsMasterModalOpen] = useState(false);
@@ -2663,6 +2744,10 @@ const SettingsScreen = () => {
   const [masterChangeError, setMasterChangeError] = useState('');
   const [isBiometricBusy, setIsBiometricBusy] = useState(false);
   const [biometricError, setBiometricError] = useState('');
+  const [backupPassword, setBackupPassword] = useState('');
+  const [isBackupBusy, setIsBackupBusy] = useState(false);
+  const [backupError, setBackupError] = useState('');
+  const backupInputRef = useRef(null);
 
   const closeMasterModal = () => {
     setIsMasterModalOpen(false);
@@ -2670,6 +2755,82 @@ const SettingsScreen = () => {
     setNewMasterPwd('');
     setConfirmNewMasterPwd('');
     setMasterChangeError('');
+  };
+
+  const handleExportBackup = async () => {
+    if (!backupPassword || backupPassword.length < 8) {
+      setBackupError('Usa uma password de backup com pelo menos 8 caracteres.');
+      return;
+    }
+
+    setIsBackupBusy(true);
+    setBackupError('');
+
+    try {
+      const payload = {
+        exportedAt: new Date().toISOString(),
+        vaultVersion,
+        categories,
+        passwords,
+        cards,
+      };
+
+      const encrypted = await encryptBackupPayload(payload, backupPassword);
+      const blob = new Blob([JSON.stringify(encrypted, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `passvault-backup-${new Date().toISOString().replace(/[:.]/g, '-')}.json`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+      showToast('Backup encriptado exportado.');
+    } catch (err) {
+      setBackupError(err.message || 'Não foi possível exportar o backup.');
+    } finally {
+      setIsBackupBusy(false);
+    }
+  };
+
+  const handleRestoreBackupFile = async (file) => {
+    if (!file) return;
+    if (!backupPassword || backupPassword.length < 8) {
+      setBackupError('Insere primeiro a password do backup.');
+      return;
+    }
+
+    setIsBackupBusy(true);
+    setBackupError('');
+
+    try {
+      const raw = await file.text();
+      const parsed = JSON.parse(raw);
+      const payload = await decryptBackupPayload(parsed, backupPassword);
+      const nextCategories = normalizeCategories(Array.isArray(payload.categories) ? payload.categories : DEFAULT_CATEGORIES);
+      const nextPasswords = Array.isArray(payload.passwords) ? payload.passwords : [];
+      const nextCards = Array.isArray(payload.cards) ? payload.cards : [];
+      const nextVaultVersion = Number.isFinite(Number(payload.vaultVersion)) ? Number(payload.vaultVersion) : vaultVersion;
+
+      setCategories(nextCategories);
+      setPasswords(nextPasswords);
+      setCards(nextCards);
+      setVaultVersion(nextVaultVersion);
+      await syncVault({
+        nextCategories,
+        nextPasswords,
+        nextCards,
+        nextVaultVersion,
+      });
+      showToast('Backup restaurado com sucesso.');
+    } catch (err) {
+      setBackupError(err.message || 'Não foi possível restaurar o backup.');
+    } finally {
+      setIsBackupBusy(false);
+      if (backupInputRef.current) {
+        backupInputRef.current.value = '';
+      }
+    }
   };
 
   const getBiometricRegistrationError = (err) => {
@@ -3008,6 +3169,61 @@ const SettingsScreen = () => {
               {t('disableBiometrics')}
             </Button>
           )}
+        </div>
+      </div>
+
+      <div className="pt-4 border-t border-[var(--border)]">
+        <h2 className="text-lg font-semibold text-[var(--text)] flex items-center">
+          <FolderPlus size={20} className="mr-2 text-[var(--primary)]" />
+          {t('backupSection')}
+        </h2>
+        <p className="mt-2 text-sm text-[var(--text-muted)]">
+          {t('backupDescription')}
+        </p>
+        <div className="mt-4 space-y-3">
+          <div>
+            <label className="block text-sm font-medium text-[var(--text)] mb-2">{t('backupPassword')}</label>
+            <input
+              type="password"
+              value={backupPassword}
+              onChange={(e) => setBackupPassword(e.target.value)}
+              placeholder={t('backupPasswordPlaceholder')}
+              className="w-full bg-[var(--surface)] text-[var(--text)] border border-[var(--border)] rounded-xl py-3 px-4 focus:outline-none focus:ring-2 focus:ring-[var(--primary)]"
+            />
+          </div>
+          {backupError && (
+            <p className="text-[var(--danger)] text-sm flex items-center">
+              <AlertTriangle size={14} className="mr-1" />
+              {backupError}
+            </p>
+          )}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <Button
+              variant="secondary"
+              icon={Copy}
+              className="w-full py-3"
+              onClick={handleExportBackup}
+              disabled={isBackupBusy}
+            >
+              {isBackupBusy ? t('generating') : t('exportBackup')}
+            </Button>
+            <Button
+              variant="secondary"
+              icon={Folder}
+              className="w-full py-3"
+              onClick={() => backupInputRef.current?.click()}
+              disabled={isBackupBusy}
+            >
+              {isBackupBusy ? t('generating') : t('restoreBackup')}
+            </Button>
+          </div>
+          <input
+            ref={backupInputRef}
+            type="file"
+            accept="application/json"
+            className="hidden"
+            onChange={(e) => handleRestoreBackupFile(e.target.files?.[0])}
+          />
         </div>
       </div>
 
