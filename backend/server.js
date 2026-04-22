@@ -516,9 +516,9 @@ app.post('/api/passkeys/login/verify', async (req, res) => {
             expectedChallenge: pendingWebAuthn.login.challenge,
             expectedOrigin: currentOrigin(req),
             expectedRPID: WEBAUTHN_RP_ID,
-            authenticator: {
-                credentialID: fromBase64Url(credential.id),
-                credentialPublicKey: fromBase64Url(credential.publicKey),
+            credential: {
+                id: credential.id,
+                publicKey: fromBase64Url(credential.publicKey),
                 counter: getCredentialCounter(credential),
             },
         });
