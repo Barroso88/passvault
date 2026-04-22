@@ -1842,7 +1842,7 @@ const PasswordManager = () => {
                         />
                       </button>
                       {expandedItemId === item.id && (
-                        <div className="border-t border-white/6 pt-2.5 sm:pt-3">
+                        <div className="pt-0">
                           <div className="flex flex-wrap items-center gap-3 px-3 py-3 sm:px-4">
                             <div className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-2xl border border-white/6 bg-black/15">
                               <img
