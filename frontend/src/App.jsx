@@ -1087,6 +1087,7 @@ const AuthScreen = () => {
     setPasskeyCredentials,
     setHasPasskeys,
     hasPasskeys,
+    passkeyCredentials,
   } = useContext(AppContext);
   const [pwd, setPwd] = useState('');
   const [confirmPwd, setConfirmPwd] = useState('');
