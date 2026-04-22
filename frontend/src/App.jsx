@@ -1694,7 +1694,7 @@ const PasswordManager = () => {
                   <div className="relative min-w-0 flex-1">
                     <div className="flex items-center gap-2">
                       <h3 className="truncate text-[15px] font-semibold tracking-wide text-white">{cat.name}</h3>
-                      <span className="rounded-full border border-black/80 bg-black px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.22em] text-white">
+                      <span className="rounded-full border border-black/50 bg-black/70 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.22em] text-white/95 backdrop-blur">
                         {getCatCount(cat.name)} {t('items')}
                       </span>
                       {isSystemCategory(cat.name) && (
