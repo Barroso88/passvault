@@ -427,20 +427,11 @@ app.post('/api/passkeys/finish/verify', async (req, res) => {
             return res.status(404).json({ error: 'Credencial biométrica não encontrada.' });
         }
 
-        const verification = await verifyAuthenticationResponse({
-            response,
-            expectedChallenge: pendingWebAuthn.finalize.challenge,
-            expectedOrigin: currentOrigin(req),
-            expectedRPID: WEBAUTHN_RP_ID,
-            authenticator: {
-                credentialID: fromBase64Url(storedCredential.id),
-                credentialPublicKey: fromBase64Url(storedCredential.publicKey),
-                counter: getCredentialCounter(storedCredential),
-            },
-        });
-
-        if (!verification.verified || !verification.authenticationInfo) {
-            return res.status(400).json({ error: 'Falha ao finalizar a biometria.' });
+        if (response?.id && response.id !== pendingWebAuthn.finalize.credentialId) {
+            return res.status(400).json({ error: 'A credencial biométrica seleccionada não corresponde ao registo pendente.' });
+        }
+        if (!wrappedVaultKey || !wrappedMasterHash) {
+            return res.status(400).json({ error: 'Dados biométricos incompletos.' });
         }
 
         const credentialId = pendingWebAuthn.finalize.credentialId;
@@ -448,7 +439,7 @@ app.post('/api/passkeys/finish/verify', async (req, res) => {
             if (cred.id !== credentialId) return cred;
             return {
                 ...cred,
-                counter: verification.authenticationInfo.newCounter,
+                counter: getCredentialCounter(cred),
                 wrappedVaultKey,
                 wrappedMasterHash,
             };
