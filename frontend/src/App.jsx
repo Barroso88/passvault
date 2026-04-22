@@ -1643,13 +1643,7 @@ const PasswordManager = () => {
   const orderedCategories = useMemo(() => sortCategoriesForDisplay(categories), [categories]);
 
   return (
-    <div className="relative h-full overflow-hidden bg-[var(--surface)]/90">
-      <div className="pointer-events-none absolute inset-0">
-        <div className="absolute -top-28 right-[-4rem] h-72 w-72 rounded-full bg-[var(--primary)]/15 blur-3xl"></div>
-        <div className="absolute -bottom-36 left-[-5rem] h-80 w-80 rounded-full bg-cyan-400/10 blur-3xl"></div>
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(255,255,255,0.08),transparent_32%),linear-gradient(180deg,rgba(255,255,255,0.03),transparent_22%)]"></div>
-      </div>
-
+    <div className="relative h-full overflow-hidden bg-transparent">
       <div className="relative h-full flex flex-col p-5 sm:p-6 lg:p-8">
         <div className="mx-auto flex w-full max-w-4xl flex-col items-center text-center">
           <h1 className="mt-4 text-3xl sm:text-4xl font-black tracking-tight text-[var(--text)]">
