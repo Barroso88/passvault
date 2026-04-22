@@ -12,3 +12,7 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
+frontend/android/keystore.properties
+frontend/android/*.jks
+frontend/android/keystore.properties
+frontend/android/*.jks

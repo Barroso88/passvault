@@ -120,6 +120,33 @@ Notes:
 - passkeys/biometrics may behave differently inside Android WebView and may need a follow-up pass
 - if you want a Play Store build later, we should switch from debug APK to a signed release build
 
+### Signed release APK
+
+To build a production-signed APK locally, create `frontend/android/keystore.properties` from the example file:
+
+```text
+frontend/android/keystore.properties.example
+```
+
+The actual `keystore.properties` and `.jks` files are ignored by Git so the signing key stays local.
+
+Then run:
+
+```bash
+cd frontend/android
+JAVA_HOME=/opt/homebrew/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home \
+ANDROID_HOME=$HOME/Library/Android/sdk \
+ANDROID_SDK_ROOT=$HOME/Library/Android/sdk \
+PATH=/opt/homebrew/opt/openjdk@21/bin:$PATH \
+./gradlew assembleRelease
+```
+
+The signed APK is produced at:
+
+```text
+frontend/android/app/build/outputs/apk/release/app-release.apk
+```
+
 ## Files of interest
 
 - [`backend/server.js`](./backend/server.js)
