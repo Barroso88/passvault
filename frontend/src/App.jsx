@@ -1724,6 +1724,11 @@ const PasswordManager = () => {
   const [aiFallbackNotice, setAiFallbackNotice] = useState('');
   const globalTerms = useMemo(() => splitSearchTerms(globalSearch), [globalSearch]);
   const localTerms = useMemo(() => splitSearchTerms(search), [search]);
+  const globalMatchingPasswords = useMemo(() => (
+    globalTerms.length
+      ? passwords.filter((item) => matchesSearchTerms(passwordSearchFields(item), globalTerms))
+      : []
+  ), [passwords, globalTerms]);
 
   const categoryOptions = useMemo(
     () => sortCategoriesForDisplay(categories).map(getCategoryName).filter(name => name),
@@ -1757,6 +1762,12 @@ const PasswordManager = () => {
   useEffect(() => {
     setDetailItem(null);
   }, [selectedCategory]);
+
+  useEffect(() => {
+    if (selectedCategory) return;
+    if (!globalMatchingPasswords.length) return;
+    setSelectedCategory(globalMatchingPasswords[0].category);
+  }, [globalMatchingPasswords, selectedCategory]);
 
 
   const handleOpenModal = (item = null) => {
