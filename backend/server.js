@@ -126,15 +126,14 @@ async function ensureSchema() {
     await pool.query('ALTER TABLE vault ADD COLUMN IF NOT EXISTS vault_key_wrap_master JSONB');
     await pool.query('ALTER TABLE vault ADD COLUMN IF NOT EXISTS webauthn_credentials JSONB');
 
-    await pool.query(
-        'INSERT INTO users (id, username) VALUES ($1, $2) ON CONFLICT (id) DO NOTHING',
-        [USER_ID, 'admin']
-    );
-
     const legacyVault = await pool.query('SELECT * FROM vault WHERE user_id = $1', [USER_ID]);
     const primaryVault = await pool.query('SELECT * FROM vaults WHERE user_id = $1', [USER_ID]);
     if (legacyVault.rows[0] && !primaryVault.rows[0]) {
         const vault = legacyVault.rows[0];
+        await pool.query(
+            'INSERT INTO users (id, username) VALUES ($1, $2) ON CONFLICT (id) DO UPDATE SET username = EXCLUDED.username, updated_at = NOW()',
+            [USER_ID, 'admin']
+        );
         await pool.query(
             `INSERT INTO vaults (
                 user_id, master_hash, vault_salt, vault_version, vault_key_wrap_master,
@@ -164,6 +163,10 @@ async function ensureSchema() {
         );
     } else if (primaryVault.rows[0] && !legacyVault.rows[0]) {
         const vault = primaryVault.rows[0];
+        await pool.query(
+            'INSERT INTO users (id, username) VALUES ($1, $2) ON CONFLICT (id) DO UPDATE SET username = EXCLUDED.username, updated_at = NOW()',
+            [USER_ID, 'admin']
+        );
         await pool.query(
             `INSERT INTO vault (
                 user_id, master_hash, vault_salt, vault_version, vault_key_wrap_master,
