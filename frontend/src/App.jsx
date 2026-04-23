@@ -1601,11 +1601,9 @@ const Dashboard = () => {
       {/* Quick Actions */}
       <div>
         <h2 className="text-sm font-semibold text-[var(--text-muted)] uppercase tracking-wider mb-3">{t('quickActions')}</h2>
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        <div className="grid grid-cols-2 gap-3">
           <Button variant="secondary" onClick={() => setQuickCreate('password')} icon={Plus} className="text-sm">{t('addPassword')}</Button>
           <Button variant="secondary" onClick={() => setQuickCreate('card')} icon={Plus} className="text-sm">{t('addCard')}</Button>
-          <Button variant="secondary" onClick={() => setActiveTab('generator')} icon={RefreshCw} className="text-sm">{t('generator')}</Button>
-          <Button variant="secondary" onClick={() => setActiveTab('settings')} icon={Settings} className="text-sm">{t('settings')}</Button>
         </div>
       </div>
 
