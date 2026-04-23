@@ -634,6 +634,7 @@ const normalizePrfSeed = (value) => {
 };
 
 const normalizeSearchValue = (value = '') => value.toLowerCase().trim();
+const isValidEmail = (value = '') => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(value || '').trim());
 
 const splitSearchTerms = (value = '') => normalizeSearchValue(value).split(/\s+/).filter(Boolean);
 
@@ -1401,9 +1402,15 @@ const AuthScreen = () => {
   const [pwd, setPwd] = useState('');
   const [confirmPwd, setConfirmPwd] = useState('');
   const [error, setError] = useState('');
+  const [verificationCode, setVerificationCode] = useState('');
+  const [verificationMessage, setVerificationMessage] = useState('');
+  const [isVerificationPending, setIsVerificationPending] = useState(false);
+  const [isVerifyingCode, setIsVerifyingCode] = useState(false);
+  const [isResendingCode, setIsResendingCode] = useState(false);
   const [isSetupState, setIsSetupState] = useState(true);
   const [isLoading, setIsLoading] = useState(true);
   const [isBiometricLoading, setIsBiometricLoading] = useState(false);
+  const pendingRegistrationRef = useRef(null);
 
   useEffect(() => {
     const storedIdentifier = sessionStorage.getItem('pv_auth_identifier') || '';
@@ -1458,7 +1465,7 @@ const AuthScreen = () => {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        identifier: identifier.trim() || 'admin',
+        identifier: identifier.trim(),
         userId: activeUserId,
         hash: masterHashValue
       })
@@ -1499,11 +1506,22 @@ const AuthScreen = () => {
     setIsLocked(false);
   };
 
+  const resetPendingRegistration = () => {
+    pendingRegistrationRef.current = null;
+    setVerificationCode('');
+    setVerificationMessage('');
+    setIsVerificationPending(false);
+  };
+
   const handleSetup = async (e) => {
     e.preventDefault();
     if (pwd !== confirmPwd) { setError(t('passwordsMismatch')); return; }
     if (pwd.length < 6) { setError('Password too short (min 6)'); return; }
-    const normalizedIdentifier = identifier.trim() || 'admin';
+    const normalizedIdentifier = identifier.trim().toLowerCase();
+    if (!isValidEmail(normalizedIdentifier)) {
+      setError('Usa um email válido para confirmar a conta.');
+      return;
+    }
 
     setIsLoading(true);
     try {
@@ -1527,29 +1545,114 @@ const AuthScreen = () => {
         const err = await res.json().catch(() => ({}));
         throw new Error(err.error || "Erro de servidor");
       }
-      const data = await res.json().catch(() => ({}));
-
-      setMasterHash(material.verifier);
-      setVaultSalt(salt);
-      setVaultVersion(2);
-      setVaultKey(vaultKeyMaterial.key);
-      setVaultKeyRaw(vaultKeyMaterial.rawBase64);
-      setVaultKeyWrapMaster(vaultKeyWrapMaster);
+      await res.json().catch(() => ({}));
+      pendingRegistrationRef.current = {
+        identifier: normalizedIdentifier,
+        masterHash: material.verifier,
+        vaultSalt: salt,
+        vaultVersion: 2,
+        vaultKeyRaw: vaultKeyMaterial.rawBase64,
+        vaultKey: vaultKeyMaterial.key,
+        vaultKeyWrapMaster,
+      };
       setIdentifier(normalizedIdentifier);
-      setUserId(data.userId || null);
       sessionStorage.setItem('pv_auth_identifier', normalizedIdentifier);
-      if (data.userId) {
-        sessionStorage.setItem('pv_user_id', data.userId);
-      }
-      setPasskeyCredentials([]);
-      setHasPasskeys(false);
-      sessionStorage.setItem('pv_master_hash', material.verifier);
-      sessionStorage.setItem('pv_vault_salt', salt);
-      setIsLocked(false);
+      setVerificationMessage(`Enviámos um código para ${normalizedIdentifier}.`);
+      setIsVerificationPending(true);
+      setError('');
     } catch(err) {
       setError(err.message || "Falha de rede. Servidor Docker em execução?");
     }
     setIsLoading(false);
+  };
+
+  const handleVerifyRegistration = async () => {
+    const pending = pendingRegistrationRef.current;
+    if (!pending?.identifier) {
+      setError('Não existe nenhum registo pendente.');
+      return;
+    }
+    if (!verificationCode.trim()) {
+      setError('Introduz o código enviado para o email.');
+      return;
+    }
+
+    setIsVerifyingCode(true);
+    setError('');
+
+    try {
+      const res = await fetch(`${API_URL}/register/verify`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          identifier: pending.identifier,
+          code: verificationCode.trim(),
+        }),
+      });
+
+      if (!res.ok) {
+        const payload = await res.json().catch(() => ({}));
+        throw new Error(payload?.error || 'Não foi possível confirmar o email.');
+      }
+
+      const data = await res.json();
+      const verifiedUserId = data.userId || data.user?.id || null;
+      const nextCategories = normalizeCategories((Array.isArray(data.categories) && data.categories.length > 0) ? data.categories : DEFAULT_CATEGORIES);
+      const nextPasswords = Array.isArray(data.passwords) ? data.passwords : [];
+      const nextCards = Array.isArray(data.cards) ? data.cards : [];
+
+      setCategories(nextCategories);
+      setPasswords(nextPasswords);
+      setCards(nextCards);
+      setMasterHash(pending.masterHash);
+      setVaultSalt(pending.vaultSalt);
+      setVaultVersion(2);
+      setVaultKey(pending.vaultKey);
+      setVaultKeyRaw(pending.vaultKeyRaw);
+      setVaultKeyWrapMaster(pending.vaultKeyWrapMaster);
+      setPasskeyCredentials(data.webauthnCredentials || []);
+      setHasPasskeys(false);
+      setNativeBiometricsEnabled(false);
+      setUserId(verifiedUserId);
+      setIdentifier(pending.identifier);
+      sessionStorage.setItem('pv_auth_identifier', pending.identifier);
+      if (verifiedUserId) {
+        sessionStorage.setItem('pv_user_id', verifiedUserId);
+      }
+      sessionStorage.setItem('pv_master_hash', pending.masterHash);
+      sessionStorage.setItem('pv_vault_salt', pending.vaultSalt);
+      setIsLocked(false);
+      resetPendingRegistration();
+      setPwd('');
+      setConfirmPwd('');
+    } catch (err) {
+      setError(err.message || 'Não foi possível confirmar o email.');
+    } finally {
+      setIsVerifyingCode(false);
+    }
+  };
+
+  const handleResendCode = async () => {
+    const pending = pendingRegistrationRef.current;
+    if (!pending?.identifier) return;
+    setIsResendingCode(true);
+    setError('');
+    try {
+      const res = await fetch(`${API_URL}/register/resend`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ identifier: pending.identifier }),
+      });
+      if (!res.ok) {
+        const payload = await res.json().catch(() => ({}));
+        throw new Error(payload?.error || 'Não foi possível reenviar o código.');
+      }
+      setVerificationMessage(`Enviámos um novo código para ${pending.identifier}.`);
+    } catch (err) {
+      setError(err.message || 'Não foi possível reenviar o código.');
+    } finally {
+      setIsResendingCode(false);
+    }
   };
 
   const handleLogin = async (e) => {
@@ -1750,7 +1853,10 @@ const AuthScreen = () => {
             type="button"
             variant={!isSetupState ? 'primary' : 'secondary'}
             className="w-full py-2 text-sm"
-            onClick={() => setIsSetupState(false)}
+            onClick={() => {
+              setIsSetupState(false);
+              resetPendingRegistration();
+            }}
           >
             {t('signIn')}
           </Button>
@@ -1758,7 +1864,10 @@ const AuthScreen = () => {
             type="button"
             variant={isSetupState ? 'primary' : 'secondary'}
             className="w-full py-2 text-sm"
-            onClick={() => setIsSetupState(true)}
+            onClick={() => {
+              setIsSetupState(true);
+              resetPendingRegistration();
+            }}
           >
             {t('signUp')}
           </Button>
@@ -1795,9 +1904,51 @@ const AuthScreen = () => {
               required
             />
           )}
+          {isSetupState && isVerificationPending && (
+            <div className="rounded-2xl border border-[var(--border)] bg-[var(--surface-hover)]/60 p-4 space-y-3">
+              <div>
+                <p className="text-sm font-semibold text-[var(--text)]">Confirma o email</p>
+                <p className="text-xs text-[var(--text-muted)] mt-1">
+                  {verificationMessage || 'Introduz o código que enviámos para o email indicado.'}
+                </p>
+              </div>
+              <Input
+                label="Código de confirmação"
+                type="text"
+                value={verificationCode}
+                onChange={e => setVerificationCode(e.target.value)}
+                placeholder="000000"
+                disabled={isVerifyingCode || isResendingCode}
+              />
+              <div className="flex gap-3">
+                <Button
+                  type="button"
+                  variant="secondary"
+                  className="flex-1"
+                  onClick={handleResendCode}
+                  disabled={isVerifyingCode || isResendingCode}
+                >
+                  {isResendingCode ? 'A reenviar...' : 'Reenviar código'}
+                </Button>
+                <Button
+                  type="button"
+                  className="flex-1"
+                  onClick={handleVerifyRegistration}
+                  disabled={isVerifyingCode || isResendingCode}
+                >
+                  {isVerifyingCode ? 'A confirmar...' : 'Confirmar email'}
+                </Button>
+              </div>
+            </div>
+          )}
           {error && <p className="text-[var(--danger)] text-sm flex items-center"><AlertTriangle size={14} className="mr-1"/> {error}</p>}
-          <Button type="submit" disabled={isLoading} className="w-full mt-4 py-3 text-lg" icon={isLoading ? Loader2 : (isSetupState ? Shield : Unlock)}>
-            {isLoading ? "A carregar..." : (isSetupState ? t('createVault') : t('unlockVault'))}
+          <Button
+            type="submit"
+            disabled={isLoading || (isSetupState && isVerificationPending)}
+            className="w-full mt-4 py-3 text-lg"
+            icon={isLoading ? Loader2 : (isSetupState ? Shield : Unlock)}
+          >
+            {isLoading ? "A carregar..." : (isSetupState ? (isVerificationPending ? 'Aguardando confirmação' : t('createVault')) : t('unlockVault'))}
           </Button>
         </form>
 

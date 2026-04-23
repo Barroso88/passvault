@@ -3,6 +3,7 @@ const cors = require('cors');
 const { Pool } = require('pg');
 const path = require('path');
 const crypto = require('crypto');
+const nodemailer = require('nodemailer');
 const {
     generateRegistrationOptions,
     verifyRegistrationResponse,
@@ -27,6 +28,15 @@ const GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-flash-latest';
 const WEBAUTHN_RP_ID = process.env.WEBAUTHN_RP_ID || 'localhost';
 const WEBAUTHN_ORIGIN = process.env.WEBAUTHN_ORIGIN || 'http://localhost:5173';
 const WEB_AUTHN_NAME = 'PassVault';
+const EMAIL_FROM = process.env.EMAIL_FROM || process.env.SMTP_USER || '';
+const EMAIL_PROVIDER = (process.env.EMAIL_PROVIDER || (process.env.SMTP_HOST ? 'smtp' : '')).toLowerCase();
+const SMTP_HOST = process.env.SMTP_HOST || '';
+const SMTP_PORT = Number(process.env.SMTP_PORT || 587);
+const SMTP_SECURE = String(process.env.SMTP_SECURE || 'false').toLowerCase() === 'true';
+const SMTP_USER = process.env.SMTP_USER || '';
+const SMTP_PASSWORD = process.env.SMTP_PASSWORD || '';
+const REGISTRATION_CODE_TTL_MINUTES = Number(process.env.REGISTRATION_CODE_TTL_MINUTES || 15);
+const REGISTRATION_MAX_ATTEMPTS = Number(process.env.REGISTRATION_MAX_ATTEMPTS || 5);
 
 const pendingWebAuthn = {
     registration: null,
@@ -64,6 +74,60 @@ const normalizeJson = (value, fallback) => {
     return value;
 };
 
+const normalizeEmail = (value = '') => String(value || '').trim().toLowerCase();
+
+const isValidEmail = (value = '') => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(value || '').trim());
+
+const generateVerificationCode = () => String(crypto.randomInt(0, 1000000)).padStart(6, '0');
+
+const hashVerificationCode = (code = '') => crypto.createHash('sha256').update(String(code)).digest('hex');
+
+const createEmailTransport = () => {
+    if (EMAIL_PROVIDER === 'smtp') {
+        if (!SMTP_HOST || !SMTP_PORT || !SMTP_USER || !SMTP_PASSWORD) {
+            throw new Error('Configuração SMTP incompleta.');
+        }
+
+        return nodemailer.createTransport({
+            host: SMTP_HOST,
+            port: SMTP_PORT,
+            secure: SMTP_SECURE,
+            auth: {
+                user: SMTP_USER,
+                pass: SMTP_PASSWORD,
+            },
+        });
+    }
+
+    return null;
+};
+
+async function sendVerificationCodeEmail({ to, code }) {
+    const transport = createEmailTransport();
+    if (!transport) {
+        throw new Error('Envio de email não configurado. Define SMTP_HOST/SMTP_USER/SMTP_PASSWORD.');
+    }
+
+    const subject = 'PassVault - Código de confirmação';
+    const text = `O teu código de confirmação PassVault é: ${code}\n\nEste código expira em ${REGISTRATION_CODE_TTL_MINUTES} minutos.`;
+    const html = `
+      <div style="font-family: Arial, sans-serif; line-height: 1.5; color: #111827;">
+        <h2 style="margin: 0 0 12px;">PassVault</h2>
+        <p style="margin: 0 0 12px;">O teu código de confirmação é:</p>
+        <div style="font-size: 28px; font-weight: 700; letter-spacing: 8px; padding: 16px 20px; background: #f3f4f6; border-radius: 12px; display: inline-block;">${code}</div>
+        <p style="margin: 16px 0 0;">Este código expira em ${REGISTRATION_CODE_TTL_MINUTES} minutos.</p>
+      </div>
+    `;
+
+    await transport.sendMail({
+        from: EMAIL_FROM,
+        to,
+        subject,
+        text,
+        html,
+    });
+}
+
 async function ensureSchema() {
     await pool.query(`
         CREATE TABLE IF NOT EXISTS users (
@@ -71,6 +135,27 @@ async function ensureSchema() {
             email TEXT UNIQUE,
             username TEXT UNIQUE,
             password_hash VARCHAR(255),
+            email_verified BOOLEAN DEFAULT FALSE,
+            created_at TIMESTAMP DEFAULT NOW(),
+            updated_at TIMESTAMP DEFAULT NOW()
+        )
+    `);
+
+    await pool.query(`
+        CREATE TABLE IF NOT EXISTS registration_requests (
+            id SERIAL PRIMARY KEY,
+            identifier TEXT UNIQUE,
+            email TEXT UNIQUE,
+            username TEXT UNIQUE,
+            master_hash VARCHAR(255),
+            vault_salt TEXT,
+            vault_version INTEGER DEFAULT 2,
+            vault_key_wrap_master JSONB,
+            code_hash VARCHAR(255),
+            attempts INTEGER DEFAULT 0,
+            expires_at TIMESTAMP,
+            used_at TIMESTAMP,
+            user_id VARCHAR(50),
             created_at TIMESTAMP DEFAULT NOW(),
             updated_at TIMESTAMP DEFAULT NOW()
         )
@@ -111,8 +196,24 @@ async function ensureSchema() {
     await pool.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS email TEXT');
     await pool.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS username TEXT');
     await pool.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS password_hash VARCHAR(255)');
+    await pool.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS email_verified BOOLEAN DEFAULT FALSE');
     await pool.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS created_at TIMESTAMP DEFAULT NOW()');
     await pool.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP DEFAULT NOW()');
+
+    await pool.query('ALTER TABLE registration_requests ADD COLUMN IF NOT EXISTS identifier TEXT');
+    await pool.query('ALTER TABLE registration_requests ADD COLUMN IF NOT EXISTS email TEXT');
+    await pool.query('ALTER TABLE registration_requests ADD COLUMN IF NOT EXISTS username TEXT');
+    await pool.query('ALTER TABLE registration_requests ADD COLUMN IF NOT EXISTS master_hash VARCHAR(255)');
+    await pool.query('ALTER TABLE registration_requests ADD COLUMN IF NOT EXISTS vault_salt TEXT');
+    await pool.query('ALTER TABLE registration_requests ADD COLUMN IF NOT EXISTS vault_version INTEGER DEFAULT 2');
+    await pool.query('ALTER TABLE registration_requests ADD COLUMN IF NOT EXISTS vault_key_wrap_master JSONB');
+    await pool.query('ALTER TABLE registration_requests ADD COLUMN IF NOT EXISTS code_hash VARCHAR(255)');
+    await pool.query('ALTER TABLE registration_requests ADD COLUMN IF NOT EXISTS attempts INTEGER DEFAULT 0');
+    await pool.query('ALTER TABLE registration_requests ADD COLUMN IF NOT EXISTS expires_at TIMESTAMP');
+    await pool.query('ALTER TABLE registration_requests ADD COLUMN IF NOT EXISTS used_at TIMESTAMP');
+    await pool.query('ALTER TABLE registration_requests ADD COLUMN IF NOT EXISTS user_id VARCHAR(50)');
+    await pool.query('ALTER TABLE registration_requests ADD COLUMN IF NOT EXISTS created_at TIMESTAMP DEFAULT NOW()');
+    await pool.query('ALTER TABLE registration_requests ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP DEFAULT NOW()');
 
     await pool.query('ALTER TABLE vaults ADD COLUMN IF NOT EXISTS vault_salt TEXT');
     await pool.query('ALTER TABLE vaults ADD COLUMN IF NOT EXISTS vault_version INTEGER DEFAULT 1');
@@ -125,6 +226,9 @@ async function ensureSchema() {
     await pool.query('ALTER TABLE vault ADD COLUMN IF NOT EXISTS vault_version INTEGER DEFAULT 1');
     await pool.query('ALTER TABLE vault ADD COLUMN IF NOT EXISTS vault_key_wrap_master JSONB');
     await pool.query('ALTER TABLE vault ADD COLUMN IF NOT EXISTS webauthn_credentials JSONB');
+
+    await pool.query('UPDATE users SET email_verified = TRUE WHERE id = $1', [USER_ID]);
+    await pool.query('UPDATE users SET email_verified = TRUE WHERE id IN (SELECT user_id FROM vaults WHERE user_id IS NOT NULL)');
 
     const legacyVault = await pool.query('SELECT * FROM vault WHERE user_id = $1', [USER_ID]);
     const primaryVault = await pool.query('SELECT * FROM vaults WHERE user_id = $1', [USER_ID]);
@@ -254,7 +358,7 @@ async function loadUserByIdentifier(identifier = '') {
     if (!normalized) return null;
 
     const result = await pool.query(
-        `SELECT id, email, username
+        `SELECT id, email, username, email_verified
          FROM users
          WHERE LOWER(COALESCE(email, '')) = $1
             OR LOWER(COALESCE(username, '')) = $1
@@ -348,6 +452,11 @@ function verifyMasterHash(vault, hash) {
         err.status = 401;
         throw err;
     }
+}
+
+function isRegistrationExpired(row) {
+    if (!row?.expires_at) return false;
+    return new Date(row.expires_at).getTime() < Date.now();
 }
 
 function currentOrigin(req) {
@@ -452,10 +561,12 @@ app.get('/api/status', async (req, res) => {
         const { userId, identifier } = req.query || {};
         let vault = null;
         let user = null;
+        let pendingRegistration = null;
 
         if (identifier) {
             user = await loadUserByIdentifier(identifier);
             vault = user ? await loadVaultByUserId(user.id) : null;
+            pendingRegistration = await pool.query('SELECT identifier, expires_at, used_at FROM registration_requests WHERE identifier = $1', [normalizeEmail(identifier)]).then((r) => r.rows[0] || null);
         } else if (userId) {
             vault = await loadVaultByUserId(userId);
             user = vault ? await pool.query('SELECT id, email, username FROM users WHERE id = $1', [userId]).then((r) => r.rows[0] || null) : null;
@@ -470,45 +581,198 @@ app.get('/api/status', async (req, res) => {
             vaultSalt: vault?.vault_salt || null,
             vaultVersion: vault?.vault_version || 1,
             hasPasskeys: getCredentials(vault).some((cred) => cred.wrappedVaultKey && cred.wrappedMasterHash),
+            registrationPending: !!(pendingRegistration && !pendingRegistration.used_at),
+            registrationExpiresAt: pendingRegistration?.expires_at || null,
         });
     } catch (err) {
         res.status(500).json({ error: err.message });
     }
 });
 
-// Setup
-app.post('/api/setup', async (req, res) => {
-    const { identifier, hash, salt, vaultKeyWrapMaster } = req.body;
-    try {
-        const normalized = normalizeIdentifier(identifier) || 'admin';
-        if (!normalized) {
-            return res.status(400).json({ error: 'Identificador do utilizador é obrigatório.' });
-        }
-        const existingUser = await loadUserByIdentifier(normalized);
-        if (existingUser) return res.status(400).json({ error: 'Utilizador já existe.' });
+async function startRegistrationRequest({ identifier, hash, salt, vaultKeyWrapMaster }) {
+    const normalized = normalizeEmail(identifier);
+    if (!normalized || !isValidEmail(normalized)) {
+        const err = new Error('É necessário um email válido para criar a conta.');
+        err.status = 400;
+        throw err;
+    }
 
-        const userId = crypto.randomUUID();
-        const isEmail = normalized.includes('@');
+    const existingUser = await loadUserByIdentifier(normalized);
+    if (existingUser?.email_verified) {
+        const err = new Error('Esse email já tem uma conta verificada.');
+        err.status = 409;
+        throw err;
+    }
+
+    const code = generateVerificationCode();
+    const codeHash = hashVerificationCode(code);
+    const expiresAt = new Date(Date.now() + REGISTRATION_CODE_TTL_MINUTES * 60000);
+    const requestResult = await pool.query(
+        `INSERT INTO registration_requests (
+            identifier, email, master_hash, vault_salt, vault_version, vault_key_wrap_master,
+            code_hash, attempts, expires_at, used_at, updated_at
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, 0, $8, NULL, NOW())
+        ON CONFLICT (identifier) DO UPDATE SET
+            email = EXCLUDED.email,
+            master_hash = EXCLUDED.master_hash,
+            vault_salt = EXCLUDED.vault_salt,
+            vault_version = EXCLUDED.vault_version,
+            vault_key_wrap_master = EXCLUDED.vault_key_wrap_master,
+            code_hash = EXCLUDED.code_hash,
+            attempts = 0,
+            expires_at = EXCLUDED.expires_at,
+            used_at = NULL,
+            updated_at = NOW()
+        RETURNING *`,
+        [
+            normalized,
+            normalized,
+            hash,
+            salt || null,
+            2,
+            vaultKeyWrapMaster ? JSON.stringify(vaultKeyWrapMaster) : null,
+            codeHash,
+            expiresAt,
+        ]
+    );
+
+    await sendVerificationCodeEmail({ to: normalized, code });
+    return {
+        success: true,
+        verificationRequired: true,
+        identifier: normalized,
+        expiresAt: requestResult.rows[0]?.expires_at || expiresAt,
+    };
+}
+
+app.post('/api/setup', async (req, res) => {
+    try {
+        const result = await startRegistrationRequest(req.body || {});
+        res.json(result);
+    } catch (err) {
+        res.status(err.status || 500).json({ error: err.message });
+    }
+});
+
+app.post('/api/register/start', async (req, res) => {
+    try {
+        const result = await startRegistrationRequest(req.body || {});
+        res.json(result);
+    } catch (err) {
+        res.status(err.status || 500).json({ error: err.message });
+    }
+});
+
+app.post('/api/register/resend', async (req, res) => {
+    const { identifier } = req.body || {};
+    try {
+        const normalized = normalizeEmail(identifier);
+        if (!normalized) {
+            return res.status(400).json({ error: 'Email inválido.' });
+        }
+
+        const request = await pool.query('SELECT * FROM registration_requests WHERE identifier = $1', [normalized]);
+        const pending = request.rows[0];
+        if (!pending) {
+            return res.status(404).json({ error: 'Não existe um pedido de registo pendente.' });
+        }
+        if (pending.used_at) {
+            return res.status(409).json({ error: 'Esse email já foi confirmado.' });
+        }
+        if (isRegistrationExpired(pending)) {
+            return res.status(410).json({ error: 'O código de confirmação expirou. Cria um novo registo.' });
+        }
+
+        const code = generateVerificationCode();
+        const codeHash = hashVerificationCode(code);
+        const expiresAt = new Date(Date.now() + REGISTRATION_CODE_TTL_MINUTES * 60000);
 
         await pool.query(
-            'INSERT INTO users (id, email, username) VALUES ($1, $2, $3) ON CONFLICT (id) DO UPDATE SET email = EXCLUDED.email, username = EXCLUDED.username, updated_at = NOW()',
-            [userId, isEmail ? normalized : null, isEmail ? null : normalized]
+            `UPDATE registration_requests
+             SET code_hash = $2, attempts = 0, expires_at = $3, updated_at = NOW()
+             WHERE identifier = $1`,
+            [normalized, codeHash, expiresAt]
+        );
+
+        await sendVerificationCodeEmail({ to: normalized, code });
+        res.json({ success: true, verificationRequired: true, identifier: normalized, expiresAt });
+    } catch (err) {
+        res.status(err.status || 500).json({ error: err.message });
+    }
+});
+
+app.post('/api/register/verify', async (req, res) => {
+    const { identifier, code } = req.body || {};
+    try {
+        const normalized = normalizeEmail(identifier);
+        if (!normalized || !code) {
+            return res.status(400).json({ error: 'Email e código são obrigatórios.' });
+        }
+
+        const request = await pool.query('SELECT * FROM registration_requests WHERE identifier = $1', [normalized]);
+        const pending = request.rows[0];
+        if (!pending) {
+            return res.status(404).json({ error: 'Não existe um pedido pendente para este email.' });
+        }
+        if (pending.used_at) {
+            return res.status(409).json({ error: 'Esse email já foi confirmado.' });
+        }
+        if (isRegistrationExpired(pending)) {
+            return res.status(410).json({ error: 'O código de confirmação expirou. Pede um novo código.' });
+        }
+        if (Number(pending.attempts || 0) >= REGISTRATION_MAX_ATTEMPTS) {
+            return res.status(429).json({ error: 'Demasiadas tentativas. Pede um novo código.' });
+        }
+        if (hashVerificationCode(code) !== pending.code_hash) {
+            await pool.query(
+                'UPDATE registration_requests SET attempts = attempts + 1, updated_at = NOW() WHERE identifier = $1',
+                [normalized]
+            );
+            return res.status(401).json({ error: 'Código de confirmação inválido.' });
+        }
+
+        const userId = crypto.randomUUID();
+        await pool.query(
+            'INSERT INTO users (id, email, username, email_verified) VALUES ($1, $2, $3, TRUE) ON CONFLICT (id) DO UPDATE SET email = EXCLUDED.email, username = EXCLUDED.username, email_verified = TRUE, updated_at = NOW()',
+            [userId, normalized, null]
         );
 
         await persistVaultRecord({
             userId,
-            masterHash: hash,
-            vaultSalt: salt || null,
-            vaultVersion: 2,
-            vaultKeyWrapMaster: vaultKeyWrapMaster || null,
+            masterHash: pending.master_hash,
+            vaultSalt: pending.vault_salt || null,
+            vaultVersion: pending.vault_version || 2,
+            vaultKeyWrapMaster: pending.vault_key_wrap_master || null,
             webauthnCredentials: [],
             categories: [],
             passwords: [],
             cards: [],
         });
-        res.json({ success: true, userId, identifier: normalized });
+
+        await pool.query(
+            `UPDATE registration_requests
+             SET used_at = NOW(), user_id = $2, updated_at = NOW()
+             WHERE identifier = $1`,
+            [normalized, userId]
+        );
+
+        const user = await loadUserByIdentifier(normalized);
+        const vault = await loadVaultByUserId(userId);
+        res.json({
+            success: true,
+            user: user ? { id: user.id, email: user.email || null, username: user.username || null } : null,
+            userId,
+            categories: sortCategories(normalizeJson(vault?.categories, [])),
+            passwords: normalizeJson(vault?.passwords, []),
+            cards: normalizeJson(vault?.cards, []),
+            vaultSalt: vault?.vault_salt || null,
+            vaultVersion: vault?.vault_version || 2,
+            vaultKeyWrapMaster: vault?.vault_key_wrap_master || null,
+            webauthnCredentials: getCredentials(vault),
+            verificationRequired: false,
+        });
     } catch (err) {
-        res.status(500).json({ error: err.message });
+        res.status(err.status || 500).json({ error: err.message });
     }
 });
 
@@ -524,6 +788,9 @@ app.post('/api/login', async (req, res) => {
             return res.status(400).json({ error: 'Identificador do utilizador é obrigatório.' });
         }
         if (!user) return res.status(404).json({ error: 'Utilizador não encontrado.' });
+        if (user.email_verified === false) {
+            return res.status(403).json({ error: 'Conta ainda não verificada. Confirma o email primeiro.' });
+        }
 
         const vault = await loadVaultByUserId(user.id);
         if (!vault) return res.status(404).json({ error: 'Cofre não configurado.' });

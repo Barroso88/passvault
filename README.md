@@ -22,7 +22,16 @@ GEMINI_API_KEY=your-gemini-api-key
 PORT=3001
 WEBAUTHN_RP_ID=localhost
 WEBAUTHN_ORIGIN=http://localhost:5173
+EMAIL_PROVIDER=smtp
+EMAIL_FROM=PassVault <no-reply@example.com>
+SMTP_HOST=smtp-relay.brevo.com
+SMTP_PORT=587
+SMTP_SECURE=false
+SMTP_USER=your-brevo-smtp-login
+SMTP_PASSWORD=your-brevo-smtp-key
 ```
+
+If you want account verification by email, the backend sends a one-time code before creating the vault. For a free setup, Brevo's SMTP relay is a good fit.
 
 Run the local stack:
 
@@ -62,10 +71,20 @@ GEMINI_API_KEY=your-gemini-api-key
 PORT=3001
 WEBAUTHN_RP_ID=passvault.barrosoportal.com
 WEBAUTHN_ORIGIN=https://passvault.barrosoportal.com
+EMAIL_PROVIDER=smtp
+EMAIL_FROM=PassVault <no-reply@passvault.barrosoportal.com>
+SMTP_HOST=smtp-relay.brevo.com
+SMTP_PORT=587
+SMTP_SECURE=false
+SMTP_USER=your-brevo-smtp-login
+SMTP_PASSWORD=your-brevo-smtp-key
+REGISTRATION_CODE_TTL_MINUTES=15
+REGISTRATION_MAX_ATTEMPTS=5
 ```
 
 Vault encryption is handled automatically by the frontend and does not need extra environment variables.
 Passkeys/biometrics require a secure origin, so when you use the Cloudflare Tunnel domain set `WEBAUTHN_RP_ID` and `WEBAUTHN_ORIGIN` to that public HTTPS hostname.
+If you enable email verification, set the SMTP variables above in the Unraid container too.
 
 Recommended compose file:
 
