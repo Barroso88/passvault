@@ -1,6 +1,8 @@
 import React, { useState, useEffect, useContext, createContext, useMemo, useRef, useCallback } from 'react';
 import { Capacitor } from '@capacitor/core';
 import { startRegistration, startAuthentication, base64URLStringToBuffer } from '@simplewebauthn/browser';
+import { BiometricAuth, AndroidBiometryStrength } from '@aparajita/capacitor-biometric-auth';
+import { SecureStorage } from '@aparajita/capacitor-secure-storage';
 import { 
   Lock, Unlock, Shield, Key, CreditCard, LayoutDashboard, Settings, Plus, 
   Search, Eye, EyeOff, Copy, Trash, Edit, Check, Star, AlertTriangle, 
@@ -15,11 +17,14 @@ import {
 const isNativeApp = Capacitor.getPlatform() !== 'web';
 const API_URL = import.meta.env.VITE_API_URL || (isNativeApp ? 'https://passvault.barrosoportal.com/api' : 'http://localhost:3001/api');
 const PREVIEW_MODE = import.meta.env.VITE_PREVIEW_MODE === 'true';
+const IS_ANDROID_NATIVE = Capacitor.getPlatform() === 'android';
 const VAULT_KDF_ITERATIONS = 250000;
 const PASSKEY_STORAGE_KEYS = {
   hasPasskeys: 'pv_has_passkeys',
   credentials: 'pv_passkey_credentials',
 };
+const ANDROID_BIOMETRIC_STORAGE_KEY = 'pv_android_biometric_vault';
+const ANDROID_BIOMETRIC_ENABLED_KEY = 'pv_android_biometric_enabled';
 const textEncoder = new TextEncoder();
 const textDecoder = new TextDecoder();
 
@@ -762,6 +767,9 @@ const AppProvider = ({ children }) => {
   const [passkeyCredentials, setPasskeyCredentials] = useState(
     PREVIEW_MODE ? [] : readStoredState(PASSKEY_STORAGE_KEYS.credentials, [])
   );
+  const [nativeBiometricsEnabled, setNativeBiometricsEnabled] = useState(
+    PREVIEW_MODE ? false : readStoredState(ANDROID_BIOMETRIC_ENABLED_KEY, false)
+  );
   
   // Estado do Cofre (Agora inicializado vazio, preenchido via Postgres)
   const [categories, setCategories] = useState(
@@ -803,6 +811,10 @@ const AppProvider = ({ children }) => {
     if (PREVIEW_MODE) return;
     localStorage.setItem(PASSKEY_STORAGE_KEYS.credentials, JSON.stringify(passkeyCredentials));
   }, [passkeyCredentials]);
+  useEffect(() => {
+    if (PREVIEW_MODE) return;
+    localStorage.setItem(ANDROID_BIOMETRIC_ENABLED_KEY, JSON.stringify(!!nativeBiometricsEnabled));
+  }, [nativeBiometricsEnabled]);
 
   const syncVault = useCallback(async ({
     nextCategories = categories,
@@ -911,6 +923,7 @@ const AppProvider = ({ children }) => {
     activeTab, setActiveTab,
     quickCreate, setQuickCreate,
     quickEdit, setQuickEdit,
+    nativeBiometricsEnabled, setNativeBiometricsEnabled,
     syncVault,
     t, showToast, copyToClipboard
   };
@@ -1061,6 +1074,47 @@ const checkPasswordStrength = (pwd) => {
   return { score, label: 'strong', color: 'bg-[var(--primary)]' };
 };
 
+const isNativeBiometricStorageAvailable = () => IS_ANDROID_NATIVE;
+
+const readAndroidBiometricVault = async () => {
+  if (!isNativeBiometricStorageAvailable()) return null;
+  const raw = await SecureStorage.getItem(ANDROID_BIOMETRIC_STORAGE_KEY);
+  if (!raw) return null;
+  try {
+    return JSON.parse(raw);
+  } catch {
+    return null;
+  }
+};
+
+const writeAndroidBiometricVault = async (payload) => {
+  if (!isNativeBiometricStorageAvailable()) return;
+  await SecureStorage.setItem(ANDROID_BIOMETRIC_STORAGE_KEY, JSON.stringify(payload));
+};
+
+const clearAndroidBiometricVault = async () => {
+  if (!isNativeBiometricStorageAvailable()) return;
+  await SecureStorage.removeItem(ANDROID_BIOMETRIC_STORAGE_KEY);
+};
+
+const authenticateAndroidBiometrics = async (reason) => {
+  if (!isNativeBiometricStorageAvailable()) {
+    throw new Error('Biometria nativa não disponível.');
+  }
+  const info = await BiometricAuth.checkBiometry();
+  if (!info.isAvailable && !info.deviceIsSecure) {
+    throw new Error('A biometria não está disponível neste dispositivo.');
+  }
+  await BiometricAuth.authenticate({
+    reason,
+    androidTitle: 'PassVault',
+    androidSubtitle: 'Desbloqueio biométrico',
+    androidConfirmationRequired: false,
+    androidBiometryStrength: AndroidBiometryStrength.weak,
+    allowDeviceCredential: true,
+  });
+};
+
 // Input Component
 const Input = ({ label, type = 'text', icon: Icon, rightIcon, onRightIconClick, className = '', ...props }) => (
   <div className={`flex flex-col mb-4 ${className}`}>
@@ -1169,8 +1223,10 @@ const AuthScreen = () => {
     setVaultVersion,
     setPasskeyCredentials,
     setHasPasskeys,
+    setNativeBiometricsEnabled,
     hasPasskeys,
     passkeyCredentials,
+    nativeBiometricsEnabled,
   } = useContext(AppContext);
   const [pwd, setPwd] = useState('');
   const [confirmPwd, setConfirmPwd] = useState('');
@@ -1188,15 +1244,17 @@ const AuthScreen = () => {
         setIsSetupState(!vaultStatus.isSetup);
         setVaultSalt(vaultStatus.vaultSalt || null);
         setVaultVersion(vaultStatus.vaultVersion || 1);
-        const nextHasPasskeys = typeof passkeyStatus.hasPasskeys === 'boolean'
-          ? passkeyStatus.hasPasskeys
-          : !!vaultStatus.hasPasskeys;
+        const nextHasPasskeys = IS_ANDROID_NATIVE
+          ? nativeBiometricsEnabled
+          : (typeof passkeyStatus.hasPasskeys === 'boolean'
+            ? passkeyStatus.hasPasskeys
+            : !!vaultStatus.hasPasskeys);
         const storedPasskeys = readStoredState(PASSKEY_STORAGE_KEYS.credentials, []);
         const nextPasskeys = mergePasskeyCredentialLists(
           Array.isArray(passkeyStatus.credentials) ? passkeyStatus.credentials : [],
           storedPasskeys,
         );
-        setHasPasskeys(nextHasPasskeys || nextPasskeys.length > 0);
+        setHasPasskeys(IS_ANDROID_NATIVE ? nativeBiometricsEnabled : (nextHasPasskeys || nextPasskeys.length > 0));
         setPasskeyCredentials(nextPasskeys);
         setIsLoading(false);
       })
@@ -1205,7 +1263,7 @@ const AuthScreen = () => {
         setError("Não foi possível conectar à API Postgres. Verifique o servidor.");
         setIsLoading(false);
       });
-  }, [setHasPasskeys, setVaultSalt, setVaultVersion]);
+  }, [setHasPasskeys, setVaultSalt, setVaultVersion, nativeBiometricsEnabled]);
 
   const legacyHash = (str) => btoa(str);
 
@@ -1237,7 +1295,7 @@ const AuthScreen = () => {
     setVaultKeyRaw(vaultKeyRawValue);
     setVaultKeyWrapMaster(data.vaultKeyWrapMaster || null);
     setPasskeyCredentials(nextPasskeys);
-    setHasPasskeys(nextPasskeys.some((credential) => credential.wrappedVaultKey && credential.wrappedMasterHash));
+    setHasPasskeys(nextPasskeys.some((credential) => credential.wrappedVaultKey && credential.wrappedMasterHash) || nativeBiometricsEnabled);
     sessionStorage.setItem('pv_master_hash', masterHashValue);
     if (data.vaultSalt) {
       sessionStorage.setItem('pv_vault_salt', data.vaultSalt);
@@ -1320,7 +1378,7 @@ const AuthScreen = () => {
         await loadVaultData(h, vaultKeyMaterial.key, decryptedVaultKeyRaw);
         setVaultVersion(data.vaultVersion || 2);
         setPasskeyCredentials(nextPasskeys);
-        setHasPasskeys(nextPasskeys.some((credential) => credential.wrappedVaultKey && credential.wrappedMasterHash));
+      setHasPasskeys(nextPasskeys.some((credential) => credential.wrappedVaultKey && credential.wrappedMasterHash) || nativeBiometricsEnabled);
       } else {
         const migrationSalt = generateVaultSalt();
         const migrationMaterial = await deriveVaultMaterial(pwd, migrationSalt);
@@ -1358,7 +1416,7 @@ const AuthScreen = () => {
         setVaultKeyRaw(vaultKeyMaterial.rawBase64);
         setVaultKeyWrapMaster(vaultKeyWrapMaster);
         setPasskeyCredentials(nextPasskeys);
-        setHasPasskeys(nextPasskeys.some((credential) => credential.wrappedVaultKey && credential.wrappedMasterHash));
+        setHasPasskeys(nextPasskeys.some((credential) => credential.wrappedVaultKey && credential.wrappedMasterHash) || nativeBiometricsEnabled);
         sessionStorage.setItem('pv_master_hash', migrationMaterial.verifier);
         sessionStorage.setItem('pv_vault_salt', migrationSalt);
         setError('');
@@ -1373,6 +1431,20 @@ const AuthScreen = () => {
   const handleBiometricLogin = async () => {
     setIsBiometricLoading(true);
     try {
+      if (IS_ANDROID_NATIVE) {
+        const stored = await readAndroidBiometricVault();
+        if (!stored?.masterHash || !stored?.vaultKeyRaw) {
+          throw new Error('A biometria não está registada neste dispositivo.');
+        }
+
+        await authenticateAndroidBiometrics('Autentica-te para abrir o cofre.');
+        const vaultKeyMaterial = await importVaultKeyMaterial(stored.vaultKeyRaw);
+        await loadVaultData(stored.masterHash, vaultKeyMaterial.key, stored.vaultKeyRaw);
+        setNativeBiometricsEnabled(true);
+        setHasPasskeys(true);
+        return;
+      }
+
       const optionsRes = await fetch(`${API_URL}/passkeys/login/options`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -2736,7 +2808,7 @@ const SettingsScreen = () => {
     t, showToast,
     setIsLocked, setMasterHash, setVaultKey, setVaultKeyRaw, setVaultKeyWrapMaster, setVaultSalt, setVaultVersion,
     masterHash, vaultSalt, vaultVersion, vaultKey, vaultKeyRaw, passwords, setPasswords, cards, setCards, categories, setCategories,
-    passkeyCredentials, setPasskeyCredentials, hasPasskeys, setHasPasskeys, syncVault,
+    passkeyCredentials, setPasskeyCredentials, hasPasskeys, setHasPasskeys, nativeBiometricsEnabled, setNativeBiometricsEnabled, syncVault,
   } = useContext(AppContext);
   const [isMasterModalOpen, setIsMasterModalOpen] = useState(false);
   const [currentMasterPwd, setCurrentMasterPwd] = useState('');
@@ -2896,6 +2968,17 @@ const SettingsScreen = () => {
       setHasPasskeys(nextPasskeys.length > 0);
       sessionStorage.setItem('pv_master_hash', nextMaterial.verifier);
       sessionStorage.setItem('pv_vault_salt', nextSalt);
+      if (IS_ANDROID_NATIVE && nativeBiometricsEnabled) {
+        await writeAndroidBiometricVault({
+          masterHash: nextMaterial.verifier,
+          vaultKeyRaw,
+          vaultSalt: nextSalt,
+          vaultVersion: 2,
+          vaultKeyWrapMaster: nextVaultKeyWrapMaster,
+        });
+        setNativeBiometricsEnabled(true);
+        setHasPasskeys(true);
+      }
       await syncVault({
         nextCategories: categories,
         nextPasswords: passwords,
@@ -2921,12 +3004,26 @@ const SettingsScreen = () => {
       setBiometricError('Não foi possível preparar a biometria neste cofre.');
       return;
     }
-
-    const label = window.prompt('Nome para esta biometria', `Passkey ${navigator.platform || 'dispositivo'}`) || 'Passkey';
     setIsBiometricBusy(true);
     setBiometricError('');
 
     try {
+      if (IS_ANDROID_NATIVE) {
+        await authenticateAndroidBiometrics('Confirma a biometria para desbloquear o cofre.');
+        await writeAndroidBiometricVault({
+          masterHash,
+          vaultKeyRaw,
+          vaultSalt,
+          vaultVersion,
+          vaultKeyWrapMaster,
+        });
+        setNativeBiometricsEnabled(true);
+        setHasPasskeys(true);
+        showToast('Biometria registada.');
+        return;
+      }
+
+      const label = window.prompt('Nome para esta biometria', `Passkey ${navigator.platform || 'dispositivo'}`) || 'Passkey';
       const optionsRes = await fetch(`${API_URL}/passkeys/register/options`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -3050,6 +3147,14 @@ const SettingsScreen = () => {
     setBiometricError('');
 
     try {
+      if (IS_ANDROID_NATIVE) {
+        await clearAndroidBiometricVault();
+        setNativeBiometricsEnabled(false);
+        setHasPasskeys(passkeyCredentials.some((credential) => credential.wrappedVaultKey && credential.wrappedMasterHash));
+        showToast('Biometria desactivada.');
+        return;
+      }
+
       const res = await fetch(`${API_URL}/passkeys/disable`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
