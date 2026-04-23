@@ -36,6 +36,7 @@ const pendingWebAuthn = {
 
 const toBase64Url = (value) => Buffer.from(value).toString('base64url');
 const fromBase64Url = (value) => Buffer.from(value, 'base64url');
+const normalizeIdentifier = (value = '') => String(value || '').trim().toLowerCase();
 const toCredentialIdString = (value) => {
     if (typeof value === 'string') return value;
     if (value instanceof Uint8Array || Buffer.isBuffer(value)) {
@@ -232,10 +233,57 @@ async function callGemini(prompt, schema) {
 }
 
 async function loadVault() {
-    const primary = await pool.query('SELECT * FROM vaults WHERE user_id = $1', [USER_ID]);
+  const primary = await pool.query('SELECT * FROM vaults WHERE user_id = $1', [USER_ID]);
+  if (primary.rows[0]) return primary.rows[0];
+  const legacy = await pool.query('SELECT * FROM vault WHERE user_id = $1', [USER_ID]);
+  return legacy.rows[0] || null;
+}
+
+async function loadVaultByUserId(userId = USER_ID) {
+    const primary = await pool.query('SELECT * FROM vaults WHERE user_id = $1', [userId]);
     if (primary.rows[0]) return primary.rows[0];
-    const legacy = await pool.query('SELECT * FROM vault WHERE user_id = $1', [USER_ID]);
+    const legacy = await pool.query('SELECT * FROM vault WHERE user_id = $1', [userId]);
     return legacy.rows[0] || null;
+}
+
+async function loadUserByIdentifier(identifier = '') {
+    const normalized = normalizeIdentifier(identifier);
+    if (!normalized) return null;
+
+    const result = await pool.query(
+        `SELECT id, email, username
+         FROM users
+         WHERE LOWER(COALESCE(email, '')) = $1
+            OR LOWER(COALESCE(username, '')) = $1
+            OR LOWER(id) = $1
+         LIMIT 1`,
+        [normalized]
+    );
+    return result.rows[0] || null;
+}
+
+async function ensureUserVaultById(userId = USER_ID) {
+    const vault = await loadVaultByUserId(userId);
+    if (vault) return vault;
+
+    const legacy = userId === USER_ID ? await loadVault() : null;
+    if (!legacy) {
+        return null;
+    }
+
+    await persistVaultRecord({
+        userId,
+        masterHash: legacy.master_hash,
+        vaultSalt: legacy.vault_salt || null,
+        vaultVersion: legacy.vault_version || 1,
+        vaultKeyWrapMaster: legacy.vault_key_wrap_master || null,
+        webauthnCredentials: getCredentials(legacy),
+        categories: normalizeJson(legacy.categories, []),
+        passwords: normalizeJson(legacy.passwords, []),
+        cards: normalizeJson(legacy.cards, []),
+    });
+
+    return loadVaultByUserId(userId);
 }
 
 function getCredentials(vault) {
@@ -321,8 +369,8 @@ async function persistVaultRecord({
     const nextCredentials = normalizeJson(webauthnCredentials, []);
 
     await pool.query(
-        'INSERT INTO users (id, username) VALUES ($1, $2) ON CONFLICT (id) DO UPDATE SET updated_at = NOW()',
-        [userId, userId === USER_ID ? 'admin' : userId]
+        'INSERT INTO users (id) VALUES ($1) ON CONFLICT (id) DO UPDATE SET updated_at = NOW()',
+        [userId]
     );
 
     await pool.query(
@@ -398,9 +446,24 @@ async function persistVaultRecord({
 // Status
 app.get('/api/status', async (req, res) => {
     try {
-        const vault = await loadVault();
+        const { userId, identifier } = req.query || {};
+        let vault = null;
+        let user = null;
+
+        if (identifier) {
+            user = await loadUserByIdentifier(identifier);
+            vault = user ? await loadVaultByUserId(user.id) : null;
+        } else if (userId) {
+            vault = await loadVaultByUserId(userId);
+            user = vault ? await pool.query('SELECT id, email, username FROM users WHERE id = $1', [userId]).then((r) => r.rows[0] || null) : null;
+        } else {
+            vault = await loadVault();
+            user = vault ? await pool.query('SELECT id, email, username FROM users WHERE id = $1', [USER_ID]).then((r) => r.rows[0] || null) : null;
+        }
+
         res.json({
             isSetup: !!vault,
+            user: user ? { id: user.id, email: user.email || null, username: user.username || null } : null,
             vaultSalt: vault?.vault_salt || null,
             vaultVersion: vault?.vault_version || 1,
             hasPasskeys: getCredentials(vault).some((cred) => cred.wrappedVaultKey && cred.wrappedMasterHash),
@@ -412,13 +475,25 @@ app.get('/api/status', async (req, res) => {
 
 // Setup
 app.post('/api/setup', async (req, res) => {
-    const { hash, salt, vaultKeyWrapMaster } = req.body;
+    const { identifier, hash, salt, vaultKeyWrapMaster } = req.body;
     try {
-        const check = await loadVault();
-        if (check) return res.status(400).json({ error: 'Cofre já existe.' });
+        const normalized = normalizeIdentifier(identifier) || 'admin';
+        if (!normalized) {
+            return res.status(400).json({ error: 'Identificador do utilizador é obrigatório.' });
+        }
+        const existingUser = await loadUserByIdentifier(normalized);
+        if (existingUser) return res.status(400).json({ error: 'Utilizador já existe.' });
+
+        const userId = crypto.randomUUID();
+        const isEmail = normalized.includes('@');
+
+        await pool.query(
+            'INSERT INTO users (id, email, username) VALUES ($1, $2, $3) ON CONFLICT (id) DO UPDATE SET email = EXCLUDED.email, username = EXCLUDED.username, updated_at = NOW()',
+            [userId, isEmail ? normalized : null, isEmail ? null : normalized]
+        );
 
         await persistVaultRecord({
-            userId: USER_ID,
+            userId,
             masterHash: hash,
             vaultSalt: salt || null,
             vaultVersion: 2,
@@ -428,7 +503,7 @@ app.post('/api/setup', async (req, res) => {
             passwords: [],
             cards: [],
         });
-        res.json({ success: true });
+        res.json({ success: true, userId, identifier: normalized });
     } catch (err) {
         res.status(500).json({ error: err.message });
     }
@@ -436,13 +511,21 @@ app.post('/api/setup', async (req, res) => {
 
 // Login via master password
 app.post('/api/login', async (req, res) => {
-    const { hash } = req.body;
+    const { identifier, hash } = req.body;
     try {
-        const vault = await loadVault();
+        const normalized = normalizeIdentifier(identifier) || 'admin';
+        if (!normalized) {
+            return res.status(400).json({ error: 'Identificador do utilizador é obrigatório.' });
+        }
+        const user = await loadUserByIdentifier(normalized);
+        if (!user) return res.status(404).json({ error: 'Utilizador não encontrado.' });
+
+        const vault = await loadVaultByUserId(user.id);
         if (!vault) return res.status(404).json({ error: 'Cofre não configurado.' });
         if (vault.master_hash !== hash) return res.status(401).json({ error: 'Password inválida.' });
 
         res.json({
+            user: { id: user.id, email: user.email || null, username: user.username || null },
             categories: sortCategories(normalizeJson(vault.categories, [])),
             passwords: normalizeJson(vault.passwords, []),
             cards: normalizeJson(vault.cards, []),
@@ -458,9 +541,10 @@ app.post('/api/login', async (req, res) => {
 
 // Sync vault changes
 app.put('/api/sync', async (req, res) => {
-    const { hash, categories, passwords, cards, vaultSalt, vaultVersion, vaultKeyWrapMaster, webauthnCredentials } = req.body;
+    const { userId = USER_ID, hash, categories, passwords, cards, vaultSalt, vaultVersion, vaultKeyWrapMaster, webauthnCredentials } = req.body;
     try {
-        const vault = await loadVault();
+        const vault = await ensureUserVaultById(userId);
+        if (!vault) return res.status(404).json({ error: 'Utilizador não encontrado.' });
         verifyMasterHash(vault, hash);
 
         const nextVersion = Number.isFinite(Number(vaultVersion)) ? Number(vaultVersion) : (vault.vault_version || 1);
@@ -469,7 +553,7 @@ app.put('/api/sync', async (req, res) => {
             ? getCredentials(vault)
             : normalizeJson(webauthnCredentials, []);
         await persistVaultRecord({
-            userId: USER_ID,
+            userId,
             masterHash: vault.master_hash,
             vaultSalt: vaultSalt || vault.vault_salt || null,
             vaultVersion: nextVersion,
@@ -488,6 +572,7 @@ app.put('/api/sync', async (req, res) => {
 // Legacy migration to vault v2
 app.post('/api/migrate', async (req, res) => {
     const {
+        userId = USER_ID,
         oldHash,
         newHash,
         salt,
@@ -498,7 +583,7 @@ app.post('/api/migrate', async (req, res) => {
         webauthnCredentials,
     } = req.body;
     try {
-        const vault = await loadVault();
+        const vault = await ensureUserVaultById(userId);
         if (!vault || vault.master_hash !== oldHash) {
             return res.status(401).json({ error: 'Não autorizado.' });
         }
@@ -508,7 +593,7 @@ app.post('/api/migrate', async (req, res) => {
             ? getCredentials(vault)
             : normalizeJson(webauthnCredentials, []);
         await persistVaultRecord({
-            userId: USER_ID,
+            userId,
             masterHash: newHash,
             vaultSalt: salt,
             vaultVersion: 2,
@@ -528,7 +613,9 @@ app.post('/api/migrate', async (req, res) => {
 // Passkeys status
 app.get('/api/passkeys/status', async (req, res) => {
     try {
-        const vault = await loadVault();
+        const { userId = USER_ID, identifier = '' } = req.query || {};
+        const resolvedUser = identifier ? await loadUserByIdentifier(identifier) : null;
+        const vault = await ensureUserVaultById(resolvedUser?.id || userId);
         res.json({
             hasPasskeys: getCredentials(vault).some((cred) => cred.wrappedVaultKey),
             credentials: getCredentials(vault),
@@ -540,9 +627,10 @@ app.get('/api/passkeys/status', async (req, res) => {
 
 // Register passkey options
 app.post('/api/passkeys/register/options', async (req, res) => {
-    const { hash, label } = req.body || {};
+    const { userId = USER_ID, identifier = '', hash, label } = req.body || {};
     try {
-        const vault = await loadVault();
+        const resolvedUser = identifier ? await loadUserByIdentifier(identifier) : null;
+        const vault = await ensureUserVaultById(resolvedUser?.id || userId);
         verifyMasterHash(vault, hash);
 
         const credentials = getCredentials(vault);
@@ -550,8 +638,8 @@ app.post('/api/passkeys/register/options', async (req, res) => {
         const options = await generateRegistrationOptions({
             rpName: WEB_AUTHN_NAME,
             rpID: WEBAUTHN_RP_ID,
-            userID: USER_ID_BYTES,
-            userName: USER_ID,
+            userID: Buffer.from((resolvedUser?.id || userId), 'utf8'),
+            userName: resolvedUser?.email || resolvedUser?.username || userId,
             userDisplayName: 'PassVault',
             attestationType: 'none',
             authenticatorSelection: {
@@ -574,9 +662,10 @@ app.post('/api/passkeys/register/options', async (req, res) => {
 });
 
 app.post('/api/passkeys/register/verify', async (req, res) => {
-    const { hash, response } = req.body || {};
+    const { userId = USER_ID, identifier = '', hash, response } = req.body || {};
     try {
-        const vault = await loadVault();
+        const resolvedUser = identifier ? await loadUserByIdentifier(identifier) : null;
+        const vault = await ensureUserVaultById(resolvedUser?.id || userId);
         verifyMasterHash(vault, hash);
         if (!pendingWebAuthn.registration) {
             return res.status(400).json({ error: 'Nenhuma inscrição biométrica pendente.' });
@@ -612,7 +701,7 @@ app.post('/api/passkeys/register/verify', async (req, res) => {
         });
 
         await persistVaultRecord({
-            userId: USER_ID,
+            userId: resolvedUser?.id || userId,
             masterHash: vault.master_hash,
             vaultSalt: vault.vault_salt || null,
             vaultVersion: vault.vault_version || 1,
@@ -633,9 +722,10 @@ app.post('/api/passkeys/register/verify', async (req, res) => {
 
 // Finalize wrapping the vault key for the new credential
 app.post('/api/passkeys/finish/options', async (req, res) => {
-    const { hash, credentialId } = req.body || {};
+    const { userId = USER_ID, identifier = '', hash, credentialId } = req.body || {};
     try {
-        const vault = await loadVault();
+        const resolvedUser = identifier ? await loadUserByIdentifier(identifier) : null;
+        const vault = await ensureUserVaultById(resolvedUser?.id || userId);
         verifyMasterHash(vault, hash);
         const credential = getCredentials(vault).find((cred) => cred.id === credentialId);
         if (!credential) {
@@ -663,9 +753,10 @@ app.post('/api/passkeys/finish/options', async (req, res) => {
 });
 
 app.post('/api/passkeys/finish/verify', async (req, res) => {
-    const { hash, response, wrappedVaultKey, wrappedMasterHash } = req.body || {};
+    const { userId = USER_ID, identifier = '', hash, response, wrappedVaultKey, wrappedMasterHash } = req.body || {};
     try {
-        const vault = await loadVault();
+        const resolvedUser = identifier ? await loadUserByIdentifier(identifier) : null;
+        const vault = await ensureUserVaultById(resolvedUser?.id || userId);
         verifyMasterHash(vault, hash);
         if (!pendingWebAuthn.finalize) {
             return res.status(400).json({ error: 'Nenhuma finalização biométrica pendente.' });
@@ -696,7 +787,7 @@ app.post('/api/passkeys/finish/verify', async (req, res) => {
         const updatedCredential = credentials.find((cred) => cred.id === credentialId);
 
         await persistVaultRecord({
-            userId: USER_ID,
+            userId: resolvedUser?.id || userId,
             masterHash: vault.master_hash,
             vaultSalt: vault.vault_salt || null,
             vaultVersion: vault.vault_version || 1,
@@ -717,7 +808,9 @@ app.post('/api/passkeys/finish/verify', async (req, res) => {
 // Login via passkey
 app.post('/api/passkeys/login/options', async (req, res) => {
     try {
-        const vault = await loadVault();
+        const { userId = USER_ID, identifier = '' } = req.body || {};
+        const resolvedUser = identifier ? await loadUserByIdentifier(identifier) : null;
+        const vault = await ensureUserVaultById(resolvedUser?.id || userId);
         const credentials = getCredentials(vault).filter((cred) => cred.wrappedVaultKey && cred.wrappedMasterHash);
         if (!credentials.length) {
             return res.status(404).json({ error: 'Biometria não configurada.' });
@@ -754,9 +847,10 @@ app.post('/api/passkeys/login/options', async (req, res) => {
 });
 
 app.post('/api/passkeys/login/verify', async (req, res) => {
-    const { response, credentialPublicKey } = req.body || {};
+    const { userId = USER_ID, identifier = '', response, credentialPublicKey } = req.body || {};
     try {
-        const vault = await loadVault();
+        const resolvedUser = identifier ? await loadUserByIdentifier(identifier) : null;
+        const vault = await ensureUserVaultById(resolvedUser?.id || userId);
         const credentials = getCredentials(vault);
         if (!pendingWebAuthn.login) {
             return res.status(400).json({ error: 'Nenhum login biométrico pendente.' });
@@ -793,10 +887,17 @@ app.post('/api/passkeys/login/verify', async (req, res) => {
             return { ...cred, counter: verification.authenticationInfo.newCounter };
         });
 
-        await pool.query(
-            'UPDATE vault SET webauthn_credentials = $1 WHERE user_id = $2',
-            [JSON.stringify(nextCredentials), USER_ID]
-        );
+        await persistVaultRecord({
+            userId: resolvedUser?.id || userId,
+            masterHash: vault.master_hash,
+            vaultSalt: vault.vault_salt || null,
+            vaultVersion: vault.vault_version || 1,
+            vaultKeyWrapMaster: vault.vault_key_wrap_master || null,
+            webauthnCredentials: nextCredentials,
+            categories: normalizeJson(vault.categories, []),
+            passwords: normalizeJson(vault.passwords, []),
+            cards: normalizeJson(vault.cards, []),
+        });
 
         pendingWebAuthn.login = null;
         res.json({ success: true });
@@ -806,13 +907,14 @@ app.post('/api/passkeys/login/verify', async (req, res) => {
 });
 
 app.post('/api/passkeys/disable', async (req, res) => {
-    const { hash } = req.body || {};
+    const { userId = USER_ID, identifier = '', hash } = req.body || {};
     try {
-        const vault = await loadVault();
+        const resolvedUser = identifier ? await loadUserByIdentifier(identifier) : null;
+        const vault = await ensureUserVaultById(resolvedUser?.id || userId);
         verifyMasterHash(vault, hash);
 
         await persistVaultRecord({
-            userId: USER_ID,
+            userId: resolvedUser?.id || userId,
             masterHash: vault.master_hash,
             vaultSalt: vault.vault_salt || null,
             vaultVersion: vault.vault_version || 1,

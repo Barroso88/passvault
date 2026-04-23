@@ -48,6 +48,9 @@ const THEMES = {
 const TRANSLATIONS = {
   pt: {
     welcome: 'Bem-vindo ao PassVault',
+    signIn: 'Entrar',
+    signUp: 'Criar Conta',
+    accountIdentifier: 'Email / Username',
     createMasterDesc: 'Crie uma palavra-passe mestra forte para proteger o seu cofre. Não a perca, não poderá ser recuperada.',
     unlockDesc: 'Insira a sua palavra-passe mestra para aceder ao cofre remoto.',
     masterPassword: 'Palavra-passe Mestra',
@@ -139,6 +142,9 @@ const TRANSLATIONS = {
   },
   en: {
     welcome: 'Welcome to PassVault',
+    signIn: 'Sign In',
+    signUp: 'Create Account',
+    accountIdentifier: 'Email / Username',
     createMasterDesc: 'Create a strong master password to secure your vault. Do not lose it, it cannot be recovered.',
     unlockDesc: 'Enter your master password to access your remote vault.',
     masterPassword: 'Master Password',
@@ -230,6 +236,9 @@ const TRANSLATIONS = {
   },
   es: {
     welcome: 'Bienvenido a PassVault',
+    signIn: 'Entrar',
+    signUp: 'Crear Cuenta',
+    accountIdentifier: 'Email / Usuario',
     createMasterDesc: 'Cree una contraseña maestra segura para su bóveda. No la pierda, no se puede recuperar.',
     unlockDesc: 'Introduzca su contraseña maestra para acceder a su bóveda remota.',
     masterPassword: 'Contraseña Maestra',
@@ -820,6 +829,7 @@ const AppProvider = ({ children }) => {
   
   // Estado de Autenticação
   const [isLocked, setIsLocked] = useState(PREVIEW_MODE ? false : true);
+  const [userId, setUserId] = useState(PREVIEW_MODE ? 'preview-user' : (sessionStorage.getItem('pv_user_id') || null));
   const [masterHash, setMasterHash] = useState(PREVIEW_MODE ? 'preview-master' : (sessionStorage.getItem('pv_master_hash') || null));
   const [vaultSalt, setVaultSalt] = useState(PREVIEW_MODE ? null : (sessionStorage.getItem('pv_vault_salt') || null));
   const [vaultVersion, setVaultVersion] = useState(1);
@@ -879,12 +889,21 @@ const AppProvider = ({ children }) => {
     if (PREVIEW_MODE) return;
     localStorage.setItem(ANDROID_BIOMETRIC_ENABLED_KEY, JSON.stringify(!!nativeBiometricsEnabled));
   }, [nativeBiometricsEnabled]);
+  useEffect(() => {
+    if (PREVIEW_MODE) return;
+    if (userId) {
+      sessionStorage.setItem('pv_user_id', userId);
+    } else {
+      sessionStorage.removeItem('pv_user_id');
+    }
+  }, [userId]);
 
   const syncVault = useCallback(async ({
     nextCategories = categories,
     nextPasswords = passwords,
     nextCards = cards,
     nextPasskeys = passkeyCredentials,
+    currentUserId = userId,
     hash = masterHash,
     key = vaultKey,
     salt = vaultSalt,
@@ -903,6 +922,7 @@ const AppProvider = ({ children }) => {
         categories: nextCategories,
         passwords: encryptedPasswords,
         cards: encryptedCards,
+        userId: currentUserId,
         vaultSalt: salt,
         vaultVersion: nextVaultVersion,
         vaultKeyWrapMaster: nextVaultKeyWrapMaster,
@@ -916,7 +936,7 @@ const AppProvider = ({ children }) => {
     }
 
     return { ok: true };
-  }, [categories, passwords, cards, passkeyCredentials, isLocked, masterHash, vaultKey, vaultSalt, vaultVersion, vaultKeyWrapMaster]);
+  }, [categories, passwords, cards, passkeyCredentials, isLocked, masterHash, vaultKey, vaultSalt, vaultVersion, vaultKeyWrapMaster, userId]);
 
   // Aplicação da Base de Dados PostgreSQL (Auto-Sync)
   const isInitialMount = useRef(true);
@@ -927,7 +947,7 @@ const AppProvider = ({ children }) => {
       return; 
     }
     syncVault().catch(err => console.error("Falha ao sincronizar com Postgres:", err));
-  }, [categories, passwords, cards, isLocked, masterHash, vaultKey, vaultSalt, syncVault]);
+  }, [categories, passwords, cards, isLocked, masterHash, vaultKey, vaultSalt, syncVault, userId]);
 
   // Apply Theme CSS Variables
   useEffect(() => {
@@ -981,7 +1001,7 @@ const AppProvider = ({ children }) => {
 
   const contextValue = {
     theme, setTheme, lang, setLang, timeoutMinutes, setTimeoutMinutes,
-    isLocked, setIsLocked, masterHash, setMasterHash, vaultSalt, setVaultSalt, vaultVersion, setVaultVersion, vaultKey, setVaultKey, vaultKeyRaw, setVaultKeyRaw, vaultKeyWrapMaster, setVaultKeyWrapMaster, hasPasskeys, setHasPasskeys, passkeyCredentials, setPasskeyCredentials,
+    isLocked, setIsLocked, userId, setUserId, masterHash, setMasterHash, vaultSalt, setVaultSalt, vaultVersion, setVaultVersion, vaultKey, setVaultKey, vaultKeyRaw, setVaultKeyRaw, vaultKeyWrapMaster, setVaultKeyWrapMaster, hasPasskeys, setHasPasskeys, passkeyCredentials, setPasskeyCredentials,
     categories, setCategories,
     passwords, setPasswords, cards, setCards,
     activeTab, setActiveTab,
@@ -1274,6 +1294,8 @@ const Modal = ({ isOpen, onClose, title, children }) => {
 
 const AuthScreen = () => {
   const {
+    userId,
+    setUserId,
     setMasterHash,
     setIsLocked,
     t,
@@ -1293,6 +1315,7 @@ const AuthScreen = () => {
     passkeyCredentials,
     nativeBiometricsEnabled,
   } = useContext(AppContext);
+  const [identifier, setIdentifier] = useState(sessionStorage.getItem('pv_auth_identifier') || '');
   const [pwd, setPwd] = useState('');
   const [confirmPwd, setConfirmPwd] = useState('');
   const [error, setError] = useState('');
@@ -1301,14 +1324,28 @@ const AuthScreen = () => {
   const [isBiometricLoading, setIsBiometricLoading] = useState(false);
 
   useEffect(() => {
+    const storedIdentifier = sessionStorage.getItem('pv_auth_identifier') || '';
+    const storedUserId = sessionStorage.getItem('pv_user_id') || '';
+    const statusUrl = storedIdentifier
+      ? `${API_URL}/status?identifier=${encodeURIComponent(storedIdentifier)}`
+      : `${API_URL}/status`;
+    const passkeyUrl = storedIdentifier
+      ? `${API_URL}/passkeys/status?identifier=${encodeURIComponent(storedIdentifier)}`
+      : (storedUserId ? `${API_URL}/passkeys/status?userId=${encodeURIComponent(storedUserId)}` : `${API_URL}/passkeys/status`);
+
     Promise.all([
-      fetch(`${API_URL}/status`).then((res) => res.json()),
-      fetch(`${API_URL}/passkeys/status`).then((res) => res.json()).catch(() => ({})),
+      fetch(statusUrl).then((res) => res.json()),
+      fetch(passkeyUrl).then((res) => res.json()).catch(() => ({})),
     ])
       .then(([vaultStatus, passkeyStatus]) => {
         setIsSetupState(!vaultStatus.isSetup);
         setVaultSalt(vaultStatus.vaultSalt || null);
         setVaultVersion(vaultStatus.vaultVersion || 1);
+        if (vaultStatus.user) {
+          setIdentifier(vaultStatus.user.email || vaultStatus.user.username || '');
+          sessionStorage.setItem('pv_auth_identifier', vaultStatus.user.email || vaultStatus.user.username || '');
+          setUserId(vaultStatus.user.id || null);
+        }
         const nextHasPasskeys = IS_ANDROID_NATIVE
           ? nativeBiometricsEnabled
           : (typeof passkeyStatus.hasPasskeys === 'boolean'
@@ -1328,15 +1365,15 @@ const AuthScreen = () => {
         setError("Não foi possível conectar à API Postgres. Verifique o servidor.");
         setIsLoading(false);
       });
-  }, [setHasPasskeys, setVaultSalt, setVaultVersion, nativeBiometricsEnabled]);
+  }, [setHasPasskeys, setVaultSalt, setVaultVersion, nativeBiometricsEnabled, setUserId]);
 
   const legacyHash = (str) => btoa(str);
 
-  const loadVaultData = async (masterHashValue, vaultKeyInstance, vaultKeyRawValue = null) => {
+  const loadVaultData = async (masterHashValue, vaultKeyInstance, vaultKeyRawValue = null, nextUser = null) => {
     const res = await fetch(`${API_URL}/login`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ hash: masterHashValue })
+      body: JSON.stringify({ identifier: identifier.trim() || 'admin', hash: masterHashValue })
     });
 
     if (!res.ok) {
@@ -1359,6 +1396,11 @@ const AuthScreen = () => {
     setVaultKey(vaultKeyInstance);
     setVaultKeyRaw(vaultKeyRawValue);
     setVaultKeyWrapMaster(data.vaultKeyWrapMaster || null);
+    const activeUserId = nextUser?.id || data.user?.id || userId || null;
+    if (activeUserId) {
+      setUserId(activeUserId);
+      sessionStorage.setItem('pv_user_id', activeUserId);
+    }
     setPasskeyCredentials(nextPasskeys);
     setHasPasskeys(nextPasskeys.some((credential) => credential.wrappedVaultKey && credential.wrappedMasterHash) || nativeBiometricsEnabled);
     sessionStorage.setItem('pv_master_hash', masterHashValue);
@@ -1373,6 +1415,7 @@ const AuthScreen = () => {
     e.preventDefault();
     if (pwd !== confirmPwd) { setError(t('passwordsMismatch')); return; }
     if (pwd.length < 6) { setError('Password too short (min 6)'); return; }
+    const normalizedIdentifier = identifier.trim() || 'admin';
 
     setIsLoading(true);
     try {
@@ -1385,6 +1428,7 @@ const AuthScreen = () => {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          identifier: normalizedIdentifier,
           hash: material.verifier,
           salt,
           vaultKeyWrapMaster,
@@ -1395,6 +1439,7 @@ const AuthScreen = () => {
         const err = await res.json().catch(() => ({}));
         throw new Error(err.error || "Erro de servidor");
       }
+      const data = await res.json().catch(() => ({}));
 
       setMasterHash(material.verifier);
       setVaultSalt(salt);
@@ -1402,6 +1447,12 @@ const AuthScreen = () => {
       setVaultKey(vaultKeyMaterial.key);
       setVaultKeyRaw(vaultKeyMaterial.rawBase64);
       setVaultKeyWrapMaster(vaultKeyWrapMaster);
+      setIdentifier(normalizedIdentifier);
+      setUserId(data.userId || null);
+      sessionStorage.setItem('pv_auth_identifier', normalizedIdentifier);
+      if (data.userId) {
+        sessionStorage.setItem('pv_user_id', data.userId);
+      }
       setPasskeyCredentials([]);
       setHasPasskeys(false);
       sessionStorage.setItem('pv_master_hash', material.verifier);
@@ -1417,6 +1468,7 @@ const AuthScreen = () => {
     e.preventDefault();
     setIsLoading(true);
     try {
+      const normalizedIdentifier = identifier.trim() || 'admin';
       const activeSalt = vaultSalt || null;
       const material = activeSalt ? await deriveVaultMaterial(pwd, activeSalt) : null;
       const h = activeSalt ? material.verifier : legacyHash(pwd);
@@ -1424,7 +1476,7 @@ const AuthScreen = () => {
       const res = await fetch(`${API_URL}/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ hash: h })
+        body: JSON.stringify({ identifier: normalizedIdentifier, hash: h })
       });
 
       if (!res.ok) {
@@ -1433,6 +1485,12 @@ const AuthScreen = () => {
       }
 
       const data = await res.json();
+      if (data?.user?.id) {
+        setUserId(data.user.id);
+        sessionStorage.setItem('pv_user_id', data.user.id);
+      }
+      setIdentifier(normalizedIdentifier);
+      sessionStorage.setItem('pv_auth_identifier', normalizedIdentifier);
       const nextPasskeys = data.webauthnCredentials || [];
       const isModernVault = Number(data.vaultVersion || 1) >= 2 && !!data.vaultKeyWrapMaster;
 
@@ -1440,7 +1498,7 @@ const AuthScreen = () => {
         const wrappedVaultKey = data.vaultKeyWrapMaster;
         const decryptedVaultKeyRaw = await decryptVaultObject(wrappedVaultKey, material.key);
         const vaultKeyMaterial = await importVaultKeyMaterial(decryptedVaultKeyRaw);
-        await loadVaultData(h, vaultKeyMaterial.key, decryptedVaultKeyRaw);
+        await loadVaultData(h, vaultKeyMaterial.key, decryptedVaultKeyRaw, data.user || null);
         setVaultVersion(data.vaultVersion || 2);
         setPasskeyCredentials(nextPasskeys);
       setHasPasskeys(nextPasskeys.some((credential) => credential.wrappedVaultKey && credential.wrappedMasterHash) || nativeBiometricsEnabled);
@@ -1480,6 +1538,9 @@ const AuthScreen = () => {
         setVaultKey(vaultKeyMaterial.key);
         setVaultKeyRaw(vaultKeyMaterial.rawBase64);
         setVaultKeyWrapMaster(vaultKeyWrapMaster);
+        if (data?.user?.id) {
+          setUserId(data.user.id);
+        }
         setPasskeyCredentials(nextPasskeys);
         setHasPasskeys(nextPasskeys.some((credential) => credential.wrappedVaultKey && credential.wrappedMasterHash) || nativeBiometricsEnabled);
         sessionStorage.setItem('pv_master_hash', migrationMaterial.verifier);
@@ -1504,7 +1565,15 @@ const AuthScreen = () => {
 
         await authenticateAndroidBiometrics('Autentica-te para abrir o cofre.');
         const vaultKeyMaterial = await importVaultKeyMaterial(stored.vaultKeyRaw);
-        await loadVaultData(stored.masterHash, vaultKeyMaterial.key, stored.vaultKeyRaw);
+        if (stored.userId) {
+          setUserId(stored.userId);
+          sessionStorage.setItem('pv_user_id', stored.userId);
+        }
+        if (stored.identifier) {
+          setIdentifier(stored.identifier);
+          sessionStorage.setItem('pv_auth_identifier', stored.identifier);
+        }
+        await loadVaultData(stored.masterHash, vaultKeyMaterial.key, stored.vaultKeyRaw, stored.userId ? { id: stored.userId } : null);
         setNativeBiometricsEnabled(true);
         setHasPasskeys(true);
         return;
@@ -1513,6 +1582,7 @@ const AuthScreen = () => {
       const optionsRes = await fetch(`${API_URL}/passkeys/login/options`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: userId || 'admin_vault', identifier }),
       });
 
       if (!optionsRes.ok) {
@@ -1554,6 +1624,8 @@ const AuthScreen = () => {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          userId: userId || 'admin_vault',
+          identifier,
           response: authenticationResponse,
           credentialPublicKey: credential.publicKey || null,
         })
@@ -1585,7 +1657,36 @@ const AuthScreen = () => {
           {isLoading ? "A ligar à Base de Dados..." : (isSetupState ? t('createMasterDesc') : t('unlockDesc'))}
         </p>
 
+        <div className="mb-4 grid grid-cols-2 gap-2">
+          <Button
+            type="button"
+            variant={!isSetupState ? 'primary' : 'secondary'}
+            className="w-full py-2 text-sm"
+            onClick={() => setIsSetupState(false)}
+          >
+            {t('signIn')}
+          </Button>
+          <Button
+            type="button"
+            variant={isSetupState ? 'primary' : 'secondary'}
+            className="w-full py-2 text-sm"
+            onClick={() => setIsSetupState(true)}
+          >
+            {t('signUp')}
+          </Button>
+        </div>
+
         <form onSubmit={isSetupState ? handleSetup : handleLogin} className="space-y-4 text-left">
+          <Input
+            label={t('accountIdentifier')}
+            type="text"
+            icon={Globe}
+            value={identifier}
+            onChange={e => setIdentifier(e.target.value)}
+            required={!isSetupState}
+            placeholder="andre@exemplo.com"
+            disabled={isLoading}
+          />
           <Input
             label={t('masterPassword')}
             type="password"
@@ -3073,6 +3174,7 @@ const SettingsScreen = () => {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          userId: userId || 'admin_vault',
           oldHash: currentMaterial.verifier,
           newHash: nextMaterial.verifier,
           salt: nextSalt,
@@ -3099,6 +3201,8 @@ const SettingsScreen = () => {
       sessionStorage.setItem('pv_vault_salt', nextSalt);
       if (IS_ANDROID_NATIVE && nativeBiometricsEnabled) {
         await writeAndroidBiometricVault({
+          userId: userId || 'admin_vault',
+          identifier,
           masterHash: nextMaterial.verifier,
           vaultKeyRaw,
           vaultSalt: nextSalt,
@@ -3129,6 +3233,8 @@ const SettingsScreen = () => {
       if (IS_ANDROID_NATIVE) {
         await authenticateAndroidBiometrics('Confirma a biometria para desbloquear o cofre.');
         await writeAndroidBiometricVault({
+          userId: userId || 'admin_vault',
+          identifier,
           masterHash,
           vaultKeyRaw,
           vaultSalt,
@@ -3145,7 +3251,7 @@ const SettingsScreen = () => {
       const optionsRes = await fetch(`${API_URL}/passkeys/register/options`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ hash: masterHash, label }),
+        body: JSON.stringify({ userId: userId || 'admin_vault', identifier, hash: masterHash, label }),
       });
 
       if (!optionsRes.ok) {
@@ -3169,7 +3275,7 @@ const SettingsScreen = () => {
       const verifyRes = await fetch(`${API_URL}/passkeys/register/verify`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ hash: masterHash, response: registrationResponse }),
+        body: JSON.stringify({ userId: userId || 'admin_vault', identifier, hash: masterHash, response: registrationResponse }),
       });
 
       if (!verifyRes.ok) {
@@ -3186,7 +3292,7 @@ const SettingsScreen = () => {
       const finishOptionsRes = await fetch(`${API_URL}/passkeys/finish/options`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ hash: masterHash, credentialId }),
+        body: JSON.stringify({ userId: userId || 'admin_vault', identifier, hash: masterHash, credentialId }),
       });
 
       if (!finishOptionsRes.ok) {
@@ -3217,6 +3323,8 @@ const SettingsScreen = () => {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          userId: userId || 'admin_vault',
+          identifier,
           hash: masterHash,
           response: authenticationResponse,
           wrappedVaultKey,
@@ -3248,6 +3356,7 @@ const SettingsScreen = () => {
         nextPasswords: passwords,
         nextCards: cards,
         nextPasskeys,
+        currentUserId: userId || 'admin_vault',
       });
       showToast('Biometria registada.');
     } catch (err) {
@@ -3276,7 +3385,7 @@ const SettingsScreen = () => {
       const res = await fetch(`${API_URL}/passkeys/disable`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ hash: masterHash }),
+        body: JSON.stringify({ userId: userId || 'admin_vault', identifier, hash: masterHash }),
       });
 
       if (!res.ok) {
