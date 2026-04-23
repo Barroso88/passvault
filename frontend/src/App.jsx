@@ -1777,7 +1777,7 @@ const PasswordManager = () => {
   useEffect(() => {
     if (!globalTerms.length || !bestGlobalMatch) return;
     setSelectedCategory((current) => (current === bestGlobalMatch.category ? current : bestGlobalMatch.category));
-    setDetailItem(bestGlobalMatch);
+    setDetailItem(null);
   }, [bestGlobalMatch, globalTerms.length]);
 
 
