@@ -626,6 +626,29 @@ const cardSearchFields = (card) => [
   card?.expiry,
 ];
 
+const resolveGlobalSearchTab = ({ terms = [], passwords = [], cards = [], categories = [], activeTab = 'dashboard' }) => {
+  if (!terms.length) return null;
+
+  const cardMatch = cards.some((card) => matchesSearchTerms(cardSearchFields(card), terms));
+  const passwordMatch = passwords.some((item) => matchesSearchTerms(passwordSearchFields(item), terms));
+  const categoryMatch = categories.some((category) => matchesSearchTerms([getCategoryName(category)], terms));
+
+  if (passwordMatch || categoryMatch) {
+    if (!cardMatch) return 'passwords';
+    if (activeTab === 'passwords') return 'passwords';
+  }
+
+  if (cardMatch) {
+    return 'cards';
+  }
+
+  if (passwordMatch || categoryMatch) {
+    return 'passwords';
+  }
+
+  return null;
+};
+
 const buildPrfExtensionsForCredentials = (credentials = []) => {
   const evalByCredential = {};
   (Array.isArray(credentials) ? credentials : []).forEach((credential) => {
@@ -3467,7 +3490,39 @@ const SettingsScreen = () => {
 // ==========================================
 
 const MainLayout = () => {
-  const { activeTab, setActiveTab, t, setIsLocked, setMasterHash, setVaultKey, setVaultKeyRaw, setVaultKeyWrapMaster, setVaultSalt, setPasskeyCredentials, setHasPasskeys, globalSearch, setGlobalSearch } = useContext(AppContext);
+  const {
+    activeTab,
+    setActiveTab,
+    t,
+    setIsLocked,
+    setMasterHash,
+    setVaultKey,
+    setVaultKeyRaw,
+    setVaultKeyWrapMaster,
+    setVaultSalt,
+    setPasskeyCredentials,
+    setHasPasskeys,
+    globalSearch,
+    setGlobalSearch,
+    passwords,
+    cards,
+    categories,
+  } = useContext(AppContext);
+  const globalTerms = useMemo(() => splitSearchTerms(globalSearch), [globalSearch]);
+
+  useEffect(() => {
+    const nextTab = resolveGlobalSearchTab({
+      terms: globalTerms,
+      passwords,
+      cards,
+      categories,
+      activeTab,
+    });
+
+    if (nextTab && nextTab !== activeTab) {
+      setActiveTab(nextTab);
+    }
+  }, [activeTab, cards, categories, globalTerms, passwords, setActiveTab]);
 
   const navItems = [
     { id: 'dashboard', icon: LayoutDashboard, label: t('dashboard') },
