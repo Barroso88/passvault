@@ -1673,13 +1673,11 @@ const AuthScreen = () => {
     setIsLoading(true);
     try {
       const normalizedIdentifier = identifier.trim() || 'admin';
-      let activeSalt = vaultSalt || sessionStorage.getItem('pv_vault_salt') || null;
       let vaultStatus = null;
-      if (!activeSalt && normalizedIdentifier !== 'admin') {
+      if (normalizedIdentifier !== 'admin') {
         const statusRes = await fetch(`${API_URL}/status?identifier=${encodeURIComponent(normalizedIdentifier)}`);
         if (statusRes.ok) {
           vaultStatus = await statusRes.json();
-          activeSalt = vaultStatus.vaultSalt || null;
           if (vaultStatus.user?.id) {
             setUserId(vaultStatus.user.id);
             sessionStorage.setItem('pv_user_id', vaultStatus.user.id);
@@ -1697,6 +1695,13 @@ const AuthScreen = () => {
             sessionStorage.setItem('pv_vault_salt', vaultStatus.vaultSalt);
           }
         }
+      }
+      let activeSalt = vaultStatus?.vaultSalt || null;
+      if (!activeSalt && normalizedIdentifier !== 'admin') {
+        throw new Error('Não foi possível obter a salt do cofre. Atualiza a sessão e tenta novamente.');
+      }
+      if (!activeSalt && normalizedIdentifier === 'admin') {
+        activeSalt = vaultSalt || sessionStorage.getItem('pv_vault_salt') || null;
       }
       const material = activeSalt ? await deriveVaultMaterial(pwd, activeSalt) : null;
       const h = activeSalt ? material.verifier : legacyHash(pwd);
@@ -3857,7 +3862,6 @@ const SettingsScreen = () => {
           setVaultKeyWrapMaster(null);
           setVaultSalt(null);
           sessionStorage.removeItem('pv_master_hash');
-          sessionStorage.removeItem('pv_vault_salt');
         }}>{t('logout')}</Button>
       </div>
 
@@ -3965,7 +3969,6 @@ const MainLayout = () => {
     setVaultKeyWrapMaster(null);
     setVaultSalt(null);
     sessionStorage.removeItem('pv_master_hash');
-    sessionStorage.removeItem('pv_vault_salt');
   };
 
   return (
