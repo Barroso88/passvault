@@ -1877,8 +1877,8 @@ const PasswordManager = () => {
   const orderedCategories = useMemo(() => sortCategoriesForDisplay(categories), [categories]);
 
   return (
-    <div className="relative h-full overflow-hidden bg-transparent">
-      <div className="relative h-full flex flex-col p-2 sm:p-6 lg:p-8">
+    <div className="relative h-full min-h-0 overflow-hidden bg-transparent">
+      <div className="relative flex h-full min-h-0 flex-col p-2 sm:p-6 lg:p-8">
         <div className="mx-auto flex w-full max-w-4xl flex-col items-center text-center">
           <h1 className="mt-2 text-2xl font-black tracking-tight text-[var(--text)] sm:mt-4 sm:text-4xl">
             {t('passwords')}
@@ -1886,7 +1886,7 @@ const PasswordManager = () => {
         </div>
 
         {!selectedCategory ? (
-          <div className="mt-6 flex-1 overflow-y-auto pb-4">
+          <div className="mt-6 flex-1 min-h-0 overflow-y-auto overscroll-contain pb-24 sm:pb-10">
             <div className="mb-5 flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:justify-center sm:gap-3">
               <Button onClick={() => handleOpenModal()} icon={Plus} className="w-full rounded-2xl px-5 sm:w-auto">
                 {t('addPassword')}
@@ -1978,7 +1978,7 @@ const PasswordManager = () => {
             </div>
           </div>
         ) : (
-          <div className="mt-6 flex-1 overflow-y-auto pb-4">
+          <div className="mt-6 flex-1 min-h-0 overflow-y-auto overscroll-contain pb-24 sm:pb-10">
             <div className="mb-5 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
               <div className="w-full lg:w-auto">
                 <button
@@ -2021,7 +2021,7 @@ const PasswordManager = () => {
               </div>
             </div>
 
-            <div className="mt-5">
+            <div className="mt-5 pb-8 sm:pb-0">
               {filtered.length === 0 ? (
                 <div className="flex h-[180px] items-center justify-center border-y border-dashed border-[var(--border)] bg-transparent text-[var(--text-muted)]">
                   <span className="text-sm">{selectedCategory}</span>
@@ -3446,7 +3446,7 @@ const MainLayout = () => {
       </aside>
 
       {/* Main Content Area */}
-      <main className="flex-1 flex flex-col h-full relative">
+      <main className="flex-1 flex min-h-0 flex-col h-full relative">
         {/* Mobile Header */}
         <header className="md:hidden flex items-center justify-between p-4 border-b border-[var(--border)] bg-[var(--surface)] sticky top-0 z-20">
           <div className="flex items-center space-x-2 text-[var(--primary)]">
@@ -3456,7 +3456,7 @@ const MainLayout = () => {
           <button onClick={handleLock} className="text-[var(--text-muted)] p-2"><LogOut size={20}/></button>
         </header>
 
-        <div className="flex-1 overflow-y-auto p-4 md:p-8">
+        <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain p-4 pb-28 md:p-8 md:pb-12">
           {activeTab === 'dashboard' && <Dashboard />}
           {activeTab === 'passwords' && <PasswordManager />}
           {activeTab === 'cards' && <CardManager />}
