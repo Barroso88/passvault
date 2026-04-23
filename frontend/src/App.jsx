@@ -2807,7 +2807,7 @@ const SettingsScreen = () => {
     timeoutMinutes, setTimeoutMinutes,
     t, showToast,
     setIsLocked, setMasterHash, setVaultKey, setVaultKeyRaw, setVaultKeyWrapMaster, setVaultSalt, setVaultVersion,
-    masterHash, vaultSalt, vaultVersion, vaultKey, vaultKeyRaw, passwords, setPasswords, cards, setCards, categories, setCategories,
+    masterHash, vaultSalt, vaultVersion, vaultKey, vaultKeyRaw, vaultKeyWrapMaster, passwords, setPasswords, cards, setCards, categories, setCategories,
     passkeyCredentials, setPasskeyCredentials, hasPasskeys, setHasPasskeys, nativeBiometricsEnabled, setNativeBiometricsEnabled, syncVault,
   } = useContext(AppContext);
   const [isMasterModalOpen, setIsMasterModalOpen] = useState(false);
