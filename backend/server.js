@@ -283,7 +283,16 @@ app.put('/api/sync', async (req, res) => {
 
 // Legacy migration to vault v2
 app.post('/api/migrate', async (req, res) => {
-    const { oldHash, newHash, salt, categories, passwords, cards, vaultKeyWrapMaster } = req.body;
+    const {
+        oldHash,
+        newHash,
+        salt,
+        categories,
+        passwords,
+        cards,
+        vaultKeyWrapMaster,
+        webauthnCredentials,
+    } = req.body;
     try {
         const vault = await loadVault();
         if (!vault || vault.master_hash !== oldHash) {
@@ -291,8 +300,11 @@ app.post('/api/migrate', async (req, res) => {
         }
 
         const nextCategories = sortCategories(normalizeJson(categories, []));
+        const nextCredentials = typeof webauthnCredentials === 'undefined'
+            ? getCredentials(vault)
+            : normalizeJson(webauthnCredentials, []);
         await pool.query(
-            'UPDATE vault SET master_hash = $1, vault_salt = $2, vault_version = 2, vault_key_wrap_master = $3, categories = $4, passwords = $5, cards = $6 WHERE user_id = $7',
+            'UPDATE vault SET master_hash = $1, vault_salt = $2, vault_version = 2, vault_key_wrap_master = $3, categories = $4, passwords = $5, cards = $6, webauthn_credentials = $7 WHERE user_id = $8',
             [
                 newHash,
                 salt,
@@ -300,6 +312,7 @@ app.post('/api/migrate', async (req, res) => {
                 JSON.stringify(nextCategories),
                 JSON.stringify(passwords),
                 JSON.stringify(cards),
+                JSON.stringify(nextCredentials),
                 USER_ID,
             ]
         );

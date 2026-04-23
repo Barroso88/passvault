@@ -2954,10 +2954,32 @@ const SettingsScreen = () => {
       const nextSalt = generateVaultSalt();
       const nextMaterial = await deriveVaultMaterial(newMasterPwd, nextSalt);
       const nextVaultKeyWrapMaster = await encryptVaultObject(vaultKeyRaw, nextMaterial.key);
+      const encryptedPasswords = await encryptVaultArray(passwords, vaultKey);
+      const encryptedCards = await encryptVaultArray(cards, vaultKey);
       const nextPasskeys = await Promise.all(passkeyCredentials.map(async (credential) => ({
         ...credential,
         wrappedMasterHash: await encryptVaultObject(nextMaterial.verifier, vaultKey),
       })));
+
+      const migrateRes = await fetch(`${API_URL}/migrate`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          oldHash: currentMaterial.verifier,
+          newHash: nextMaterial.verifier,
+          salt: nextSalt,
+          categories,
+          passwords: encryptedPasswords,
+          cards: encryptedCards,
+          vaultKeyWrapMaster: nextVaultKeyWrapMaster,
+          webauthnCredentials: nextPasskeys,
+        }),
+      });
+
+      if (!migrateRes.ok) {
+        const payload = await migrateRes.json().catch(() => ({}));
+        throw new Error(payload?.error || 'Não foi possível actualizar a palavra-passe mestra.');
+      }
 
       setMasterHash(nextMaterial.verifier);
       setVaultSalt(nextSalt);
@@ -2978,17 +3000,6 @@ const SettingsScreen = () => {
         setNativeBiometricsEnabled(true);
         setHasPasskeys(true);
       }
-      await syncVault({
-        nextCategories: categories,
-        nextPasswords: passwords,
-        nextCards: cards,
-        nextPasskeys,
-        hash: nextMaterial.verifier,
-        key: vaultKey,
-        salt: nextSalt,
-        nextVaultKeyWrapMaster,
-        nextVaultVersion: 2,
-      });
       showToast(t('masterPasswordUpdated'));
       closeMasterModal();
     } catch (err) {
