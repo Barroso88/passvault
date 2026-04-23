@@ -839,6 +839,19 @@ const decryptBackupPayload = async (backup, password) => {
   return JSON.parse(textDecoder.decode(plain));
 };
 
+const parseLegacyBackupPayload = (backup) => {
+  if (!backup || typeof backup !== 'object') return null;
+  const hasLegacyShape = Array.isArray(backup.categories) || Array.isArray(backup.passwords) || Array.isArray(backup.cards);
+  if (!hasLegacyShape) return null;
+  return {
+    exportedAt: backup.exportedAt || backup.exported_at || new Date().toISOString(),
+    vaultVersion: Number.isFinite(Number(backup.vaultVersion)) ? Number(backup.vaultVersion) : 1,
+    categories: Array.isArray(backup.categories) ? backup.categories : DEFAULT_CATEGORIES,
+    passwords: Array.isArray(backup.passwords) ? backup.passwords : [],
+    cards: Array.isArray(backup.cards) ? backup.cards : [],
+  };
+};
+
 // ==========================================
 // 2. CONTEXT & STATE MANAGEMENT
 // ==========================================
@@ -3327,7 +3340,14 @@ const SettingsScreen = () => {
     try {
       const raw = await file.text();
       const parsed = JSON.parse(raw);
-      const payload = await decryptBackupPayload(parsed, backupPassword);
+      const payload = parsed.v === 1 && parsed.kind === 'passvault-backup'
+        ? await decryptBackupPayload(parsed, backupPassword)
+        : parseLegacyBackupPayload(parsed);
+
+      if (!payload) {
+        throw new Error('O ficheiro de backup é inválido ou não é compatível com esta versão.');
+      }
+
       const nextCategories = normalizeCategories(Array.isArray(payload.categories) ? payload.categories : DEFAULT_CATEGORIES);
       const nextPasswords = Array.isArray(payload.passwords) ? payload.passwords : [];
       const nextCards = Array.isArray(payload.cards) ? payload.cards : [];
@@ -3345,7 +3365,10 @@ const SettingsScreen = () => {
       });
       showToast('Backup restaurado com sucesso.');
     } catch (err) {
-      setBackupError(err.message || 'Não foi possível restaurar o backup.');
+      const message = err?.name === 'OperationError' || /decrypt|operationerror/i.test(err?.message || '')
+        ? 'Password do backup incorrecta ou ficheiro corrompido.'
+        : err.message || 'Não foi possível restaurar o backup.';
+      setBackupError(message);
     } finally {
       setIsBackupBusy(false);
       if (backupInputRef.current) {
