@@ -3266,7 +3266,7 @@ const SettingsScreen = () => {
     timeoutMinutes, setTimeoutMinutes,
     t, showToast,
     setIsLocked, setMasterHash, setVaultKey, setVaultKeyRaw, setVaultKeyWrapMaster, setVaultSalt, setVaultVersion,
-    masterHash, vaultSalt, vaultVersion, vaultKey, vaultKeyRaw, vaultKeyWrapMaster, passwords, setPasswords, cards, setCards, categories, setCategories,
+    userId, masterHash, vaultSalt, vaultVersion, vaultKey, vaultKeyRaw, vaultKeyWrapMaster, passwords, setPasswords, cards, setCards, categories, setCategories,
     passkeyCredentials, setPasskeyCredentials, hasPasskeys, setHasPasskeys, nativeBiometricsEnabled, setNativeBiometricsEnabled, syncVault,
   } = useContext(AppContext);
   const [isMasterModalOpen, setIsMasterModalOpen] = useState(false);
@@ -3281,7 +3281,8 @@ const SettingsScreen = () => {
   const [isBackupBusy, setIsBackupBusy] = useState(false);
   const [backupError, setBackupError] = useState('');
   const backupInputRef = useRef(null);
-  const currentVaultKeyWrapMaster = typeof vaultKeyWrapMaster === 'undefined' ? null : vaultKeyWrapMaster;
+  const identifier = sessionStorage.getItem('pv_auth_identifier') || '';
+  const currentVaultKeyWrapMaster = vaultKeyWrapMaster || null;
 
   const closeMasterModal = () => {
     setIsMasterModalOpen(false);
