@@ -475,6 +475,28 @@ const readStoredState = (key, fallback) => {
   }
 };
 
+const normalizeStorageScope = (value = '') => {
+  const scope = String(value || '').trim().toLowerCase();
+  return scope || 'global';
+};
+
+const getVaultStorageScope = (userId = '', identifier = '') => normalizeStorageScope(userId || identifier || 'global');
+
+const getScopedStorageKey = (baseKey, scope = 'global') => `${baseKey}:${normalizeStorageScope(scope)}`;
+
+const readScopedStoredState = (baseKey, scope = 'global', fallback) => {
+  const scopedKey = getScopedStorageKey(baseKey, scope);
+  const scopedValue = readStoredState(scopedKey, undefined);
+  if (typeof scopedValue !== 'undefined') return scopedValue;
+  const legacyValue = readStoredState(baseKey, undefined);
+  if (typeof legacyValue !== 'undefined') return legacyValue;
+  return fallback;
+};
+
+const writeScopedStoredState = (baseKey, scope = 'global', value) => {
+  localStorage.setItem(getScopedStorageKey(baseKey, scope), JSON.stringify(value));
+};
+
 const bytesToBase64 = (bytes) => {
   let binary = '';
   const chunkSize = 0x8000;
@@ -836,12 +858,15 @@ const AppProvider = ({ children }) => {
   const [vaultKey, setVaultKey] = useState(null);
   const [vaultKeyRaw, setVaultKeyRaw] = useState(null);
   const [vaultKeyWrapMaster, setVaultKeyWrapMaster] = useState(null);
-  const [hasPasskeys, setHasPasskeys] = useState(PREVIEW_MODE ? false : !!readStoredState(PASSKEY_STORAGE_KEYS.hasPasskeys, false));
+  const initialStorageScope = PREVIEW_MODE
+    ? 'preview-user'
+    : getVaultStorageScope(sessionStorage.getItem('pv_user_id') || sessionStorage.getItem('pv_auth_identifier') || '');
+  const [hasPasskeys, setHasPasskeys] = useState(PREVIEW_MODE ? false : !!readScopedStoredState(PASSKEY_STORAGE_KEYS.hasPasskeys, initialStorageScope, false));
   const [passkeyCredentials, setPasskeyCredentials] = useState(
-    PREVIEW_MODE ? [] : readStoredState(PASSKEY_STORAGE_KEYS.credentials, [])
+    PREVIEW_MODE ? [] : readScopedStoredState(PASSKEY_STORAGE_KEYS.credentials, initialStorageScope, [])
   );
   const [nativeBiometricsEnabled, setNativeBiometricsEnabled] = useState(
-    PREVIEW_MODE ? false : readStoredState(ANDROID_BIOMETRIC_ENABLED_KEY, false)
+    PREVIEW_MODE ? false : readScopedStoredState(ANDROID_BIOMETRIC_ENABLED_KEY, initialStorageScope, false)
   );
   
   // Estado do Cofre (Agora inicializado vazio, preenchido via Postgres)
@@ -879,22 +904,41 @@ const AppProvider = ({ children }) => {
   }, [cards]);
   useEffect(() => {
     if (PREVIEW_MODE) return;
-    localStorage.setItem(PASSKEY_STORAGE_KEYS.hasPasskeys, JSON.stringify(!!hasPasskeys));
-  }, [hasPasskeys]);
+    writeScopedStoredState(PASSKEY_STORAGE_KEYS.hasPasskeys, getVaultStorageScope(userId), !!hasPasskeys);
+  }, [hasPasskeys, userId]);
   useEffect(() => {
     if (PREVIEW_MODE) return;
-    localStorage.setItem(PASSKEY_STORAGE_KEYS.credentials, JSON.stringify(passkeyCredentials));
-  }, [passkeyCredentials]);
+    writeScopedStoredState(PASSKEY_STORAGE_KEYS.credentials, getVaultStorageScope(userId), passkeyCredentials);
+  }, [passkeyCredentials, userId]);
   useEffect(() => {
     if (PREVIEW_MODE) return;
-    localStorage.setItem(ANDROID_BIOMETRIC_ENABLED_KEY, JSON.stringify(!!nativeBiometricsEnabled));
-  }, [nativeBiometricsEnabled]);
+    writeScopedStoredState(ANDROID_BIOMETRIC_ENABLED_KEY, getVaultStorageScope(userId), !!nativeBiometricsEnabled);
+  }, [nativeBiometricsEnabled, userId]);
   useEffect(() => {
     if (PREVIEW_MODE) return;
     if (userId) {
       sessionStorage.setItem('pv_user_id', userId);
     } else {
       sessionStorage.removeItem('pv_user_id');
+    }
+  }, [userId]);
+
+  useEffect(() => {
+    if (PREVIEW_MODE) return;
+    const scope = getVaultStorageScope(userId);
+    const storedPasskeys = readScopedStoredState(PASSKEY_STORAGE_KEYS.credentials, scope, []);
+    const storedHasPasskeys = readScopedStoredState(PASSKEY_STORAGE_KEYS.hasPasskeys, scope, null);
+    const storedNativeBiometrics = readScopedStoredState(ANDROID_BIOMETRIC_ENABLED_KEY, scope, null);
+    if (Array.isArray(storedPasskeys)) {
+      setPasskeyCredentials(storedPasskeys);
+      if (typeof storedHasPasskeys === 'boolean') {
+        setHasPasskeys(storedHasPasskeys);
+      } else {
+        setHasPasskeys(storedPasskeys.some((credential) => credential.wrappedVaultKey && credential.wrappedMasterHash));
+      }
+    }
+    if (typeof storedNativeBiometrics === 'boolean') {
+      setNativeBiometricsEnabled(storedNativeBiometrics);
     }
   }, [userId]);
 
@@ -1161,25 +1205,63 @@ const checkPasswordStrength = (pwd) => {
 
 const isNativeBiometricStorageAvailable = () => IS_ANDROID_NATIVE;
 
-const readAndroidBiometricVault = async () => {
+const normalizeAndroidBiometricVaultStore = (raw) => {
+  if (!raw) return { v: 2, vaults: {} };
+  if (typeof raw === 'object' && raw !== null) {
+    if (raw.v === 2 && raw.vaults && typeof raw.vaults === 'object') {
+      return { v: 2, vaults: raw.vaults };
+    }
+    if (raw.masterHash || raw.vaultKeyRaw || raw.vaultKeyWrapMaster) {
+      return { v: 2, vaults: { global: raw } };
+    }
+  }
+  return { v: 2, vaults: {} };
+};
+
+const readAndroidBiometricVault = async (scope = 'global') => {
   if (!isNativeBiometricStorageAvailable()) return null;
   const raw = await SecureStorage.getItem(ANDROID_BIOMETRIC_STORAGE_KEY);
   if (!raw) return null;
   try {
-    return JSON.parse(raw);
+    const parsed = JSON.parse(raw);
+    const store = normalizeAndroidBiometricVaultStore(parsed);
+    return store.vaults?.[normalizeStorageScope(scope)] || store.vaults?.global || null;
   } catch {
     return null;
   }
 };
 
-const writeAndroidBiometricVault = async (payload) => {
+const writeAndroidBiometricVault = async (payload, scope = 'global') => {
   if (!isNativeBiometricStorageAvailable()) return;
-  await SecureStorage.setItem(ANDROID_BIOMETRIC_STORAGE_KEY, JSON.stringify(payload));
+  const raw = await SecureStorage.getItem(ANDROID_BIOMETRIC_STORAGE_KEY);
+  let store = { v: 2, vaults: {} };
+  try {
+    store = normalizeAndroidBiometricVaultStore(raw ? JSON.parse(raw) : null);
+  } catch {
+    store = { v: 2, vaults: {} };
+  }
+  store.vaults[normalizeStorageScope(scope)] = payload;
+  await SecureStorage.setItem(ANDROID_BIOMETRIC_STORAGE_KEY, JSON.stringify(store));
 };
 
-const clearAndroidBiometricVault = async () => {
+const clearAndroidBiometricVault = async (scope = 'global') => {
   if (!isNativeBiometricStorageAvailable()) return;
-  await SecureStorage.removeItem(ANDROID_BIOMETRIC_STORAGE_KEY);
+  const raw = await SecureStorage.getItem(ANDROID_BIOMETRIC_STORAGE_KEY);
+  if (!raw) return;
+  try {
+    const store = normalizeAndroidBiometricVaultStore(JSON.parse(raw));
+    const scopedKey = normalizeStorageScope(scope);
+    if (store.vaults?.[scopedKey]) {
+      delete store.vaults[scopedKey];
+    }
+    if (!store.vaults || Object.keys(store.vaults).length === 0) {
+      await SecureStorage.removeItem(ANDROID_BIOMETRIC_STORAGE_KEY);
+      return;
+    }
+    await SecureStorage.setItem(ANDROID_BIOMETRIC_STORAGE_KEY, JSON.stringify(store));
+  } catch {
+    await SecureStorage.removeItem(ANDROID_BIOMETRIC_STORAGE_KEY);
+  }
 };
 
 const authenticateAndroidBiometrics = async (reason) => {
@@ -1351,7 +1433,8 @@ const AuthScreen = () => {
           : (typeof passkeyStatus.hasPasskeys === 'boolean'
             ? passkeyStatus.hasPasskeys
             : !!vaultStatus.hasPasskeys);
-        const storedPasskeys = readStoredState(PASSKEY_STORAGE_KEYS.credentials, []);
+        const storedScope = getVaultStorageScope(storedUserId || storedIdentifier);
+        const storedPasskeys = readScopedStoredState(PASSKEY_STORAGE_KEYS.credentials, storedScope, []);
         const nextPasskeys = mergePasskeyCredentialLists(
           Array.isArray(passkeyStatus.credentials) ? passkeyStatus.credentials : [],
           storedPasskeys,
@@ -1370,10 +1453,15 @@ const AuthScreen = () => {
   const legacyHash = (str) => btoa(str);
 
   const loadVaultData = async (masterHashValue, vaultKeyInstance, vaultKeyRawValue = null, nextUser = null) => {
+    const activeUserId = nextUser?.id || userId || null;
     const res = await fetch(`${API_URL}/login`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ identifier: identifier.trim() || 'admin', hash: masterHashValue })
+      body: JSON.stringify({
+        identifier: identifier.trim() || 'admin',
+        userId: activeUserId,
+        hash: masterHashValue
+      })
     });
 
     if (!res.ok) {
@@ -1396,10 +1484,10 @@ const AuthScreen = () => {
     setVaultKey(vaultKeyInstance);
     setVaultKeyRaw(vaultKeyRawValue);
     setVaultKeyWrapMaster(data.vaultKeyWrapMaster || null);
-    const activeUserId = nextUser?.id || data.user?.id || userId || null;
-    if (activeUserId) {
-      setUserId(activeUserId);
-      sessionStorage.setItem('pv_user_id', activeUserId);
+    const nextActiveUserId = nextUser?.id || data.user?.id || userId || null;
+    if (nextActiveUserId) {
+      setUserId(nextActiveUserId);
+      sessionStorage.setItem('pv_user_id', nextActiveUserId);
     }
     setPasskeyCredentials(nextPasskeys);
     setHasPasskeys(nextPasskeys.some((credential) => credential.wrappedVaultKey && credential.wrappedMasterHash) || nativeBiometricsEnabled);
@@ -1558,7 +1646,7 @@ const AuthScreen = () => {
     setIsBiometricLoading(true);
     try {
       if (IS_ANDROID_NATIVE) {
-        const stored = await readAndroidBiometricVault();
+        const stored = await readAndroidBiometricVault(getVaultStorageScope(userId, identifier));
         if (!stored?.masterHash || !stored?.vaultKeyRaw) {
           throw new Error('A biometria não está registada neste dispositivo.');
         }
@@ -3208,7 +3296,7 @@ const SettingsScreen = () => {
           vaultSalt: nextSalt,
           vaultVersion: 2,
           vaultKeyWrapMaster: nextVaultKeyWrapMaster || null,
-        });
+        }, getVaultStorageScope(userId, identifier));
         setNativeBiometricsEnabled(true);
         setHasPasskeys(true);
       }
@@ -3240,7 +3328,7 @@ const SettingsScreen = () => {
           vaultSalt,
           vaultVersion,
           vaultKeyWrapMaster: currentVaultKeyWrapMaster,
-        });
+        }, getVaultStorageScope(userId, identifier));
         setNativeBiometricsEnabled(true);
         setHasPasskeys(true);
         showToast('Biometria registada.');
@@ -3375,7 +3463,7 @@ const SettingsScreen = () => {
 
     try {
       if (IS_ANDROID_NATIVE) {
-        await clearAndroidBiometricVault();
+        await clearAndroidBiometricVault(getVaultStorageScope(userId, identifier));
         setNativeBiometricsEnabled(false);
         setHasPasskeys(passkeyCredentials.some((credential) => credential.wrappedVaultKey && credential.wrappedMasterHash));
         showToast('Biometria desactivada.');

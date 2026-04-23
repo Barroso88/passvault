@@ -514,13 +514,15 @@ app.post('/api/setup', async (req, res) => {
 
 // Login via master password
 app.post('/api/login', async (req, res) => {
-    const { identifier, hash } = req.body;
+    const { identifier, userId, hash } = req.body;
     try {
-        const normalized = normalizeIdentifier(identifier) || 'admin';
-        if (!normalized) {
+        const normalized = normalizeIdentifier(identifier);
+        const user = normalized
+            ? await loadUserByIdentifier(normalized)
+            : (userId ? await pool.query('SELECT id, email, username FROM users WHERE id = $1', [userId]).then((r) => r.rows[0] || null) : null);
+        if (!normalized && !userId) {
             return res.status(400).json({ error: 'Identificador do utilizador é obrigatório.' });
         }
-        const user = await loadUserByIdentifier(normalized);
         if (!user) return res.status(404).json({ error: 'Utilizador não encontrado.' });
 
         const vault = await loadVaultByUserId(user.id);
