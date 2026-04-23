@@ -611,6 +611,22 @@ const matchesSearchTerms = (fields = [], terms = []) => {
   return terms.every((term) => fields.some((field) => String(field || '').toLowerCase().includes(term)));
 };
 
+const findBestPasswordMatch = (passwords = [], terms = [], rawSearch = '') => {
+  if (!terms.length) return null;
+
+  const normalizedRawSearch = normalizeSearchValue(rawSearch);
+  const normalizedTerms = terms.filter(Boolean);
+  const matchAnyField = (item) => matchesSearchTerms(passwordSearchFields(item), normalizedTerms);
+  const titleValue = (item) => normalizeSearchValue(item?.title || '');
+
+  return (
+    passwords.find((item) => titleValue(item) === normalizedRawSearch)
+    || passwords.find((item) => normalizedRawSearch && titleValue(item).startsWith(normalizedRawSearch))
+    || passwords.find((item) => matchAnyField(item))
+    || null
+  );
+};
+
 const passwordSearchFields = (password) => [
   password?.title,
   password?.username,
@@ -1724,11 +1740,10 @@ const PasswordManager = () => {
   const [aiFallbackNotice, setAiFallbackNotice] = useState('');
   const globalTerms = useMemo(() => splitSearchTerms(globalSearch), [globalSearch]);
   const localTerms = useMemo(() => splitSearchTerms(search), [search]);
-  const globalMatchingPasswords = useMemo(() => (
-    globalTerms.length
-      ? passwords.filter((item) => matchesSearchTerms(passwordSearchFields(item), globalTerms))
-      : []
-  ), [passwords, globalTerms]);
+  const bestGlobalMatch = useMemo(
+    () => findBestPasswordMatch(passwords, globalTerms, globalSearch),
+    [passwords, globalTerms, globalSearch]
+  );
 
   const categoryOptions = useMemo(
     () => sortCategoriesForDisplay(categories).map(getCategoryName).filter(name => name),
@@ -1748,10 +1763,10 @@ const PasswordManager = () => {
 
   const filtered = useMemo(() => {
     if (!selectedCategory) return [];
+    const activeTerms = globalTerms.length ? globalTerms : localTerms;
     return passwords.filter(p => {
-      const localMatch = matchesSearchTerms(passwordSearchFields(p), localTerms);
-      const globalMatch = matchesSearchTerms(passwordSearchFields(p), globalTerms);
-      return localMatch && globalMatch && p.category === selectedCategory;
+      const searchMatch = matchesSearchTerms(passwordSearchFields(p), activeTerms);
+      return searchMatch && p.category === selectedCategory;
     }).sort((a, b) => {
       const aLabel = (a.title || a.username || '').trim().toLocaleLowerCase();
       const bLabel = (b.title || b.username || '').trim().toLocaleLowerCase();
@@ -1760,14 +1775,10 @@ const PasswordManager = () => {
   }, [passwords, localTerms, globalTerms, selectedCategory]);
 
   useEffect(() => {
-    setDetailItem(null);
-  }, [selectedCategory]);
-
-  useEffect(() => {
-    if (selectedCategory) return;
-    if (!globalMatchingPasswords.length) return;
-    setSelectedCategory(globalMatchingPasswords[0].category);
-  }, [globalMatchingPasswords, selectedCategory]);
+    if (!globalTerms.length || !bestGlobalMatch) return;
+    setSelectedCategory((current) => (current === bestGlobalMatch.category ? current : bestGlobalMatch.category));
+    setDetailItem(bestGlobalMatch);
+  }, [bestGlobalMatch, globalTerms.length]);
 
 
   const handleOpenModal = (item = null) => {
@@ -1879,6 +1890,7 @@ const PasswordManager = () => {
       setPasswords(prev => prev.map(p => p.category === editingCategory.name ? { ...p, category: trimmed } : p));
       if (selectedCategory === editingCategory.name) {
         setSelectedCategory(trimmed);
+        setDetailItem(null);
       }
       const nextPasswords = passwords.map(p => p.category === editingCategory.name ? { ...p, category: trimmed } : p);
       persistVault(nextCategories, nextPasswords).catch(error => {
@@ -1897,6 +1909,7 @@ const PasswordManager = () => {
       const nextCategories = normalizeCategories([...categories, { name: trimmed, order: nextOrder }]);
       setCategories(nextCategories);
       setSelectedCategory(trimmed);
+      setDetailItem(null);
       persistVault(nextCategories, passwords).catch(error => {
         showToast('Não foi possível gravar a nova pasta.');
         console.error(error);
@@ -1931,6 +1944,7 @@ const PasswordManager = () => {
     if (selectedCategory === categoryName) {
       setSelectedCategory(fallbackCategory);
       setSearch('');
+      setDetailItem(null);
     }
 
     try {
@@ -1941,6 +1955,7 @@ const PasswordManager = () => {
       setCategories(categories);
       if (selectedCategory === categoryName) {
         setSelectedCategory(categoryName);
+        setDetailItem(null);
       }
       showToast('Não foi possível gravar a alteração da pasta.');
       console.error(error);
@@ -1987,11 +2002,13 @@ const PasswordManager = () => {
                       tabIndex={0}
                       onClick={(e) => {
                         if (e.target.closest('[data-folder-actions="true"]')) return;
+                        setDetailItem(null);
                         setSelectedCategory(cat.name);
                       }}
                       onKeyDown={(e) => {
                         if (e.key === 'Enter' || e.key === ' ') {
                           e.preventDefault();
+                          setDetailItem(null);
                           setSelectedCategory(cat.name);
                         }
                       }}
@@ -2069,6 +2086,7 @@ const PasswordManager = () => {
                 <button
                   type="button"
                   onClick={() => {
+                    setDetailItem(null);
                     setSelectedCategory(null);
                     setSearch('');
                   }}
