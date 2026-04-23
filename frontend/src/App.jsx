@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useContext, createContext, useMemo, useRef, useCallback } from 'react';
+import { Capacitor } from '@capacitor/core';
 import { startRegistration, startAuthentication, base64URLStringToBuffer } from '@simplewebauthn/browser';
 import { 
   Lock, Unlock, Shield, Key, CreditCard, LayoutDashboard, Settings, Plus, 
@@ -11,7 +12,7 @@ import {
 // CONFIGURAÇÃO DA API (Backend Unraid)
 // ==========================================
 // Alterar 'localhost' para o IP do seu Unraid quando compilar (ex: 192.168.1.100)
-const isNativeApp = typeof window !== 'undefined' && window.Capacitor?.isNativePlatform?.();
+const isNativeApp = Capacitor.getPlatform() !== 'web';
 const API_URL = import.meta.env.VITE_API_URL || (isNativeApp ? 'https://passvault.barrosoportal.com/api' : 'http://localhost:3001/api');
 const PREVIEW_MODE = import.meta.env.VITE_PREVIEW_MODE === 'true';
 const VAULT_KDF_ITERATIONS = 250000;
