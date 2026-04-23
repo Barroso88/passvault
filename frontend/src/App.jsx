@@ -3412,6 +3412,7 @@ const SettingsScreen = () => {
 
 const MainLayout = () => {
   const { activeTab, setActiveTab, t, setIsLocked, setMasterHash, setVaultKey, setVaultKeyRaw, setVaultKeyWrapMaster, setVaultSalt, setPasskeyCredentials, setHasPasskeys } = useContext(AppContext);
+  const [globalSearch, setGlobalSearch] = useState('');
 
   const navItems = [
     { id: 'dashboard', icon: LayoutDashboard, label: t('dashboard') },
@@ -3440,6 +3441,17 @@ const MainLayout = () => {
           <Shield size={28} />
           <span className="text-xl font-bold tracking-wide text-[var(--text)]">PassVault</span>
         </div>
+        <div className="px-4 pb-2">
+          <div className="flex items-center gap-2 rounded-2xl border border-[var(--border)] bg-[var(--bg)]/70 px-3 py-2.5">
+            <Search size={16} className="shrink-0 text-[var(--text-muted)]" />
+            <input
+              value={globalSearch}
+              onChange={(e) => setGlobalSearch(e.target.value)}
+              placeholder={t('search')}
+              className="w-full bg-transparent text-sm text-[var(--text)] placeholder:text-[var(--text-muted)] outline-none"
+            />
+          </div>
+        </div>
         <nav className="flex-1 px-4 space-y-2 mt-4">
           {navItems.map(item => (
             <button key={item.id} onClick={() => setActiveTab(item.id)} className={`w-full flex items-center space-x-3 px-4 py-3 rounded-xl transition-all ${activeTab === item.id ? 'bg-[var(--primary)] text-white shadow-md' : 'text-[var(--text-muted)] hover:bg-[var(--surface-hover)] hover:text-[var(--text)]'}`}>
@@ -3466,6 +3478,18 @@ const MainLayout = () => {
           </div>
           <button onClick={handleLock} className="text-[var(--text-muted)] p-2"><LogOut size={20}/></button>
         </header>
+
+        <div className="md:hidden px-4 pt-4">
+          <div className="flex items-center gap-2 rounded-2xl border border-[var(--border)] bg-[var(--surface)] px-3 py-2.5">
+            <Search size={16} className="shrink-0 text-[var(--text-muted)]" />
+            <input
+              value={globalSearch}
+              onChange={(e) => setGlobalSearch(e.target.value)}
+              placeholder={t('search')}
+              className="w-full bg-transparent text-sm text-[var(--text)] placeholder:text-[var(--text-muted)] outline-none"
+            />
+          </div>
+        </div>
 
         <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain p-4 pb-28 md:p-8 md:pb-12">
           {activeTab === 'dashboard' && <Dashboard />}
