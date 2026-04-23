@@ -2822,6 +2822,7 @@ const SettingsScreen = () => {
   const [isBackupBusy, setIsBackupBusy] = useState(false);
   const [backupError, setBackupError] = useState('');
   const backupInputRef = useRef(null);
+  const currentVaultKeyWrapMaster = typeof vaultKeyWrapMaster === 'undefined' ? null : vaultKeyWrapMaster;
 
   const closeMasterModal = () => {
     setIsMasterModalOpen(false);
@@ -2974,7 +2975,7 @@ const SettingsScreen = () => {
           vaultKeyRaw,
           vaultSalt: nextSalt,
           vaultVersion: 2,
-          vaultKeyWrapMaster: nextVaultKeyWrapMaster,
+          vaultKeyWrapMaster: nextVaultKeyWrapMaster || null,
         });
         setNativeBiometricsEnabled(true);
         setHasPasskeys(true);
@@ -3015,7 +3016,7 @@ const SettingsScreen = () => {
           vaultKeyRaw,
           vaultSalt,
           vaultVersion,
-          vaultKeyWrapMaster,
+          vaultKeyWrapMaster: currentVaultKeyWrapMaster,
         });
         setNativeBiometricsEnabled(true);
         setHasPasskeys(true);
