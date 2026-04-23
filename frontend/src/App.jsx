@@ -602,6 +602,30 @@ const normalizePrfSeed = (value) => {
   return null;
 };
 
+const normalizeSearchValue = (value = '') => value.toLowerCase().trim();
+
+const splitSearchTerms = (value = '') => normalizeSearchValue(value).split(/\s+/).filter(Boolean);
+
+const matchesSearchTerms = (fields = [], terms = []) => {
+  if (!terms.length) return true;
+  return terms.every((term) => fields.some((field) => String(field || '').toLowerCase().includes(term)));
+};
+
+const passwordSearchFields = (password) => [
+  password?.title,
+  password?.username,
+  password?.notes,
+  password?.category,
+  password?.url,
+];
+
+const cardSearchFields = (card) => [
+  card?.name,
+  card?.holder,
+  card?.number,
+  card?.expiry,
+];
+
 const buildPrfExtensionsForCredentials = (credentials = []) => {
   const evalByCredential = {};
   (Array.isArray(credentials) ? credentials : []).forEach((credential) => {
@@ -783,6 +807,7 @@ const AppProvider = ({ children }) => {
   );
   
   const [activeTab, setActiveTab] = useState('dashboard');
+  const [globalSearch, setGlobalSearch] = useState('');
   const [quickCreate, setQuickCreate] = useState(null);
   const [quickEdit, setQuickEdit] = useState(null);
   const [toast, setToast] = useState(null);
@@ -921,6 +946,7 @@ const AppProvider = ({ children }) => {
     categories, setCategories,
     passwords, setPasswords, cards, setCards,
     activeTab, setActiveTab,
+    globalSearch, setGlobalSearch,
     quickCreate, setQuickCreate,
     quickEdit, setQuickEdit,
     nativeBiometricsEnabled, setNativeBiometricsEnabled,
@@ -1567,10 +1593,18 @@ const AuthScreen = () => {
 };
 
 const Dashboard = () => {
-  const { passwords, cards, setQuickEdit, setQuickCreate, t } = useContext(AppContext);
+  const { passwords, cards, setQuickEdit, setQuickCreate, t, globalSearch } = useContext(AppContext);
+  const globalTerms = useMemo(() => splitSearchTerms(globalSearch), [globalSearch]);
   
-  const recentPasswords = [...passwords].sort((a,b) => b.date - a.date).slice(0,3);
-  const favorites = passwords.filter(p => p.favorite);
+  const recentPasswords = useMemo(() => (
+    [...passwords]
+      .filter((item) => matchesSearchTerms(passwordSearchFields(item), globalTerms))
+      .sort((a, b) => (b.date || 0) - (a.date || 0))
+      .slice(0, 3)
+  ), [passwords, globalTerms]);
+  const favorites = useMemo(() => (
+    passwords.filter((item) => item.favorite && matchesSearchTerms(passwordSearchFields(item), globalTerms))
+  ), [passwords, globalTerms]);
 
   return (
     <div className="space-y-6 animate-in fade-in">
@@ -1650,7 +1684,7 @@ const Dashboard = () => {
 };
 
 const PasswordManager = () => {
-  const { passwords, setPasswords, cards, categories, setCategories, syncVault, t, copyToClipboard, showToast } = useContext(AppContext);
+  const { passwords, setPasswords, cards, categories, setCategories, syncVault, t, copyToClipboard, showToast, globalSearch } = useContext(AppContext);
   const [search, setSearch] = useState('');
   const [selectedCategory, setSelectedCategory] = useState(null);
   const [detailItem, setDetailItem] = useState(null);
@@ -1665,6 +1699,8 @@ const PasswordManager = () => {
   const [showPwdInForm, setShowPwdInForm] = useState(false);
   const [isGeneratingInfo, setIsGeneratingInfo] = useState(false);
   const [aiFallbackNotice, setAiFallbackNotice] = useState('');
+  const globalTerms = useMemo(() => splitSearchTerms(globalSearch), [globalSearch]);
+  const localTerms = useMemo(() => splitSearchTerms(search), [search]);
 
   const categoryOptions = useMemo(
     () => sortCategoriesForDisplay(categories).map(getCategoryName).filter(name => name),
@@ -1673,20 +1709,27 @@ const PasswordManager = () => {
 
   const selectedCategoryCount = useMemo(() => {
     if (!selectedCategory) return 0;
-    return passwords.filter(p => p.category === selectedCategory).length;
-  }, [passwords, selectedCategory]);
+    return passwords.filter((p) => p.category === selectedCategory && matchesSearchTerms(passwordSearchFields(p), globalTerms)).length;
+  }, [passwords, selectedCategory, globalTerms]);
+
+  const categoryMatchesSearch = useCallback((categoryName) => {
+    if (!globalTerms.length) return true;
+    if (matchesSearchTerms([categoryName], globalTerms)) return true;
+    return passwords.some((item) => item.category === categoryName && matchesSearchTerms(passwordSearchFields(item), globalTerms));
+  }, [globalTerms, passwords]);
 
   const filtered = useMemo(() => {
     if (!selectedCategory) return [];
     return passwords.filter(p => {
-      const matchSearch = p.title.toLowerCase().includes(search.toLowerCase()) || p.username.toLowerCase().includes(search.toLowerCase());
-      return matchSearch && p.category === selectedCategory;
+      const localMatch = matchesSearchTerms(passwordSearchFields(p), localTerms);
+      const globalMatch = matchesSearchTerms(passwordSearchFields(p), globalTerms);
+      return localMatch && globalMatch && p.category === selectedCategory;
     }).sort((a, b) => {
       const aLabel = (a.title || a.username || '').trim().toLocaleLowerCase();
       const bLabel = (b.title || b.username || '').trim().toLocaleLowerCase();
       return aLabel.localeCompare(bLabel, undefined, { sensitivity: 'base' });
     });
-  }, [passwords, search, selectedCategory]);
+  }, [passwords, localTerms, globalTerms, selectedCategory]);
 
   useEffect(() => {
     setDetailItem(null);
@@ -1871,10 +1914,13 @@ const PasswordManager = () => {
   };
 
   const getCatCount = (cat) => {
-    return passwords.filter(p => p.category === cat).length;
+    return passwords.filter((p) => p.category === cat && matchesSearchTerms(passwordSearchFields(p), globalTerms)).length;
   };
 
   const orderedCategories = useMemo(() => sortCategoriesForDisplay(categories), [categories]);
+  const visibleCategories = useMemo(() => (
+    orderedCategories.filter((cat) => categoryMatchesSearch(cat.name))
+  ), [orderedCategories, categoryMatchesSearch]);
 
   return (
     <div className="relative h-full min-h-0 overflow-hidden bg-transparent">
@@ -1898,7 +1944,7 @@ const PasswordManager = () => {
 
             <div className="w-full">
               <div className="divide-y divide-white/8 border-y border-white/8 sm:rounded-none">
-                {orderedCategories.map(cat => {
+                {visibleCategories.map(cat => {
                   const tone = cat.name === 'Other' ? CATEGORY_NEUTRAL : createFolderColor(cat.order);
                   return (
                     <div
@@ -1974,6 +2020,11 @@ const PasswordManager = () => {
                     </div>
                   );
                 })}
+                {visibleCategories.length === 0 && (
+                  <div className="px-0 py-5 text-center text-sm text-[var(--text-muted)]">
+                    {t('noData')}
+                  </div>
+                )}
               </div>
             </div>
           </div>
@@ -2245,9 +2296,10 @@ const PasswordManager = () => {
 };
 
 const CardManager = () => {
-  const { cards, setCards, t, copyToClipboard } = useContext(AppContext);
+  const { cards, setCards, t, copyToClipboard, globalSearch } = useContext(AppContext);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingItem, setEditingItem] = useState(null);
+  const globalTerms = useMemo(() => splitSearchTerms(globalSearch), [globalSearch]);
 
   const [form, setForm] = useState({ name: '', number: '', holder: '', expiry: '', cvv: '', pin: '', color: 'from-blue-600 to-blue-900' });
 
@@ -2272,6 +2324,10 @@ const CardManager = () => {
   const handleDelete = (id) => {
     if(window.confirm(t('confirmDelete'))) { setCards(prev => prev.filter(c => c.id !== id)); setIsModalOpen(false); }
   };
+
+  const filteredCards = useMemo(() => (
+    cards.filter((card) => matchesSearchTerms(cardSearchFields(card), globalTerms))
+  ), [cards, globalTerms]);
 
   // Visual Card Component
   const VisualCard = ({ card, onClick }) => {
@@ -2308,11 +2364,11 @@ const CardManager = () => {
       </div>
 
       <div className="flex-1 overflow-y-auto pb-20">
-        {cards.length === 0 ? (
+        {filteredCards.length === 0 ? (
           <div className="text-center text-[var(--text-muted)] py-10">{t('noData')}</div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {cards.map(card => <VisualCard key={card.id} card={card} onClick={() => handleOpenModal(card)} />)}
+            {filteredCards.map(card => <VisualCard key={card.id} card={card} onClick={() => handleOpenModal(card)} />)}
           </div>
         )}
       </div>
@@ -3411,8 +3467,7 @@ const SettingsScreen = () => {
 // ==========================================
 
 const MainLayout = () => {
-  const { activeTab, setActiveTab, t, setIsLocked, setMasterHash, setVaultKey, setVaultKeyRaw, setVaultKeyWrapMaster, setVaultSalt, setPasskeyCredentials, setHasPasskeys } = useContext(AppContext);
-  const [globalSearch, setGlobalSearch] = useState('');
+  const { activeTab, setActiveTab, t, setIsLocked, setMasterHash, setVaultKey, setVaultKeyRaw, setVaultKeyWrapMaster, setVaultSalt, setPasskeyCredentials, setHasPasskeys, globalSearch, setGlobalSearch } = useContext(AppContext);
 
   const navItems = [
     { id: 'dashboard', icon: LayoutDashboard, label: t('dashboard') },
