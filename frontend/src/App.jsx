@@ -1673,7 +1673,31 @@ const AuthScreen = () => {
     setIsLoading(true);
     try {
       const normalizedIdentifier = identifier.trim() || 'admin';
-      const activeSalt = vaultSalt || null;
+      let activeSalt = vaultSalt || sessionStorage.getItem('pv_vault_salt') || null;
+      let vaultStatus = null;
+      if (!activeSalt && normalizedIdentifier !== 'admin') {
+        const statusRes = await fetch(`${API_URL}/status?identifier=${encodeURIComponent(normalizedIdentifier)}`);
+        if (statusRes.ok) {
+          vaultStatus = await statusRes.json();
+          activeSalt = vaultStatus.vaultSalt || null;
+          if (vaultStatus.user?.id) {
+            setUserId(vaultStatus.user.id);
+            sessionStorage.setItem('pv_user_id', vaultStatus.user.id);
+          }
+          if (vaultStatus.user?.email || vaultStatus.user?.username) {
+            const resolvedIdentifier = vaultStatus.user.email || vaultStatus.user.username || normalizedIdentifier;
+            setIdentifier(resolvedIdentifier);
+            sessionStorage.setItem('pv_auth_identifier', resolvedIdentifier);
+          }
+          if (vaultStatus.vaultVersion) {
+            setVaultVersion(vaultStatus.vaultVersion);
+          }
+          if (vaultStatus.vaultSalt) {
+            setVaultSalt(vaultStatus.vaultSalt);
+            sessionStorage.setItem('pv_vault_salt', vaultStatus.vaultSalt);
+          }
+        }
+      }
       const material = activeSalt ? await deriveVaultMaterial(pwd, activeSalt) : null;
       const h = activeSalt ? material.verifier : legacyHash(pwd);
 
