@@ -65,6 +65,34 @@ const normalizeJson = (value, fallback) => {
 
 async function ensureSchema() {
     await pool.query(`
+        CREATE TABLE IF NOT EXISTS users (
+            id VARCHAR(50) PRIMARY KEY,
+            email TEXT UNIQUE,
+            username TEXT UNIQUE,
+            password_hash VARCHAR(255),
+            created_at TIMESTAMP DEFAULT NOW(),
+            updated_at TIMESTAMP DEFAULT NOW()
+        )
+    `);
+
+    await pool.query(`
+        CREATE TABLE IF NOT EXISTS vaults (
+            id SERIAL PRIMARY KEY,
+            user_id VARCHAR(50) UNIQUE REFERENCES users(id) ON DELETE CASCADE,
+            master_hash VARCHAR(255),
+            vault_salt TEXT,
+            vault_version INTEGER DEFAULT 1,
+            vault_key_wrap_master JSONB,
+            webauthn_credentials JSONB,
+            categories JSONB,
+            passwords JSONB,
+            cards JSONB,
+            created_at TIMESTAMP DEFAULT NOW(),
+            updated_at TIMESTAMP DEFAULT NOW()
+        )
+    `);
+
+    await pool.query(`
         CREATE TABLE IF NOT EXISTS vault (
             id SERIAL PRIMARY KEY,
             user_id VARCHAR(50) UNIQUE,
@@ -79,10 +107,89 @@ async function ensureSchema() {
         )
     `);
 
+    await pool.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS email TEXT');
+    await pool.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS username TEXT');
+    await pool.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS password_hash VARCHAR(255)');
+    await pool.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS created_at TIMESTAMP DEFAULT NOW()');
+    await pool.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP DEFAULT NOW()');
+
+    await pool.query('ALTER TABLE vaults ADD COLUMN IF NOT EXISTS vault_salt TEXT');
+    await pool.query('ALTER TABLE vaults ADD COLUMN IF NOT EXISTS vault_version INTEGER DEFAULT 1');
+    await pool.query('ALTER TABLE vaults ADD COLUMN IF NOT EXISTS vault_key_wrap_master JSONB');
+    await pool.query('ALTER TABLE vaults ADD COLUMN IF NOT EXISTS webauthn_credentials JSONB');
+    await pool.query('ALTER TABLE vaults ADD COLUMN IF NOT EXISTS created_at TIMESTAMP DEFAULT NOW()');
+    await pool.query('ALTER TABLE vaults ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP DEFAULT NOW()');
+
     await pool.query('ALTER TABLE vault ADD COLUMN IF NOT EXISTS vault_salt TEXT');
     await pool.query('ALTER TABLE vault ADD COLUMN IF NOT EXISTS vault_version INTEGER DEFAULT 1');
     await pool.query('ALTER TABLE vault ADD COLUMN IF NOT EXISTS vault_key_wrap_master JSONB');
     await pool.query('ALTER TABLE vault ADD COLUMN IF NOT EXISTS webauthn_credentials JSONB');
+
+    await pool.query(
+        'INSERT INTO users (id, username) VALUES ($1, $2) ON CONFLICT (id) DO NOTHING',
+        [USER_ID, 'admin']
+    );
+
+    const legacyVault = await pool.query('SELECT * FROM vault WHERE user_id = $1', [USER_ID]);
+    const primaryVault = await pool.query('SELECT * FROM vaults WHERE user_id = $1', [USER_ID]);
+    if (legacyVault.rows[0] && !primaryVault.rows[0]) {
+        const vault = legacyVault.rows[0];
+        await pool.query(
+            `INSERT INTO vaults (
+                user_id, master_hash, vault_salt, vault_version, vault_key_wrap_master,
+                webauthn_credentials, categories, passwords, cards
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+            ON CONFLICT (user_id) DO UPDATE SET
+                master_hash = EXCLUDED.master_hash,
+                vault_salt = EXCLUDED.vault_salt,
+                vault_version = EXCLUDED.vault_version,
+                vault_key_wrap_master = EXCLUDED.vault_key_wrap_master,
+                webauthn_credentials = EXCLUDED.webauthn_credentials,
+                categories = EXCLUDED.categories,
+                passwords = EXCLUDED.passwords,
+                cards = EXCLUDED.cards,
+                updated_at = NOW()`,
+            [
+                USER_ID,
+                vault.master_hash,
+                vault.vault_salt || null,
+                vault.vault_version || 1,
+                vault.vault_key_wrap_master ? JSON.stringify(vault.vault_key_wrap_master) : null,
+                vault.webauthn_credentials ? JSON.stringify(vault.webauthn_credentials) : '[]',
+                JSON.stringify(normalizeJson(vault.categories, [])),
+                JSON.stringify(normalizeJson(vault.passwords, [])),
+                JSON.stringify(normalizeJson(vault.cards, [])),
+            ]
+        );
+    } else if (primaryVault.rows[0] && !legacyVault.rows[0]) {
+        const vault = primaryVault.rows[0];
+        await pool.query(
+            `INSERT INTO vault (
+                user_id, master_hash, vault_salt, vault_version, vault_key_wrap_master,
+                webauthn_credentials, categories, passwords, cards
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+            ON CONFLICT (user_id) DO UPDATE SET
+                master_hash = EXCLUDED.master_hash,
+                vault_salt = EXCLUDED.vault_salt,
+                vault_version = EXCLUDED.vault_version,
+                vault_key_wrap_master = EXCLUDED.vault_key_wrap_master,
+                webauthn_credentials = EXCLUDED.webauthn_credentials,
+                categories = EXCLUDED.categories,
+                passwords = EXCLUDED.passwords,
+                cards = EXCLUDED.cards`,
+            [
+                USER_ID,
+                vault.master_hash,
+                vault.vault_salt || null,
+                vault.vault_version || 1,
+                vault.vault_key_wrap_master ? JSON.stringify(vault.vault_key_wrap_master) : null,
+                vault.webauthn_credentials ? JSON.stringify(vault.webauthn_credentials) : '[]',
+                JSON.stringify(normalizeJson(vault.categories, [])),
+                JSON.stringify(normalizeJson(vault.passwords, [])),
+                JSON.stringify(normalizeJson(vault.cards, [])),
+            ]
+        );
+    }
 }
 
 async function callGemini(prompt, schema) {
@@ -125,8 +232,10 @@ async function callGemini(prompt, schema) {
 }
 
 async function loadVault() {
-    const result = await pool.query('SELECT * FROM vault WHERE user_id = $1', [USER_ID]);
-    return result.rows[0] || null;
+    const primary = await pool.query('SELECT * FROM vaults WHERE user_id = $1', [USER_ID]);
+    if (primary.rows[0]) return primary.rows[0];
+    const legacy = await pool.query('SELECT * FROM vault WHERE user_id = $1', [USER_ID]);
+    return legacy.rows[0] || null;
 }
 
 function getCredentials(vault) {
@@ -194,6 +303,98 @@ function currentOrigin(req) {
     return req.headers.origin || WEBAUTHN_ORIGIN;
 }
 
+async function persistVaultRecord({
+    userId = USER_ID,
+    masterHash,
+    vaultSalt = null,
+    vaultVersion = 1,
+    vaultKeyWrapMaster = null,
+    webauthnCredentials = [],
+    categories = [],
+    passwords = [],
+    cards = [],
+    mirrorLegacy = true,
+}) {
+    const nextCategories = sortCategories(normalizeJson(categories, []));
+    const nextPasswords = normalizeJson(passwords, []);
+    const nextCards = normalizeJson(cards, []);
+    const nextCredentials = normalizeJson(webauthnCredentials, []);
+
+    await pool.query(
+        'INSERT INTO users (id, username) VALUES ($1, $2) ON CONFLICT (id) DO UPDATE SET updated_at = NOW()',
+        [userId, userId === USER_ID ? 'admin' : userId]
+    );
+
+    await pool.query(
+        `INSERT INTO vaults (
+            user_id, master_hash, vault_salt, vault_version, vault_key_wrap_master,
+            webauthn_credentials, categories, passwords, cards
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+        ON CONFLICT (user_id) DO UPDATE SET
+            master_hash = EXCLUDED.master_hash,
+            vault_salt = EXCLUDED.vault_salt,
+            vault_version = EXCLUDED.vault_version,
+            vault_key_wrap_master = EXCLUDED.vault_key_wrap_master,
+            webauthn_credentials = EXCLUDED.webauthn_credentials,
+            categories = EXCLUDED.categories,
+            passwords = EXCLUDED.passwords,
+            cards = EXCLUDED.cards,
+            updated_at = NOW()`,
+        [
+            userId,
+            masterHash,
+            vaultSalt,
+            vaultVersion,
+            vaultKeyWrapMaster ? JSON.stringify(vaultKeyWrapMaster) : null,
+            JSON.stringify(nextCredentials),
+            JSON.stringify(nextCategories),
+            JSON.stringify(nextPasswords),
+            JSON.stringify(nextCards),
+        ]
+    );
+
+    if (mirrorLegacy) {
+        await pool.query(
+            `INSERT INTO vault (
+                user_id, master_hash, vault_salt, vault_version, vault_key_wrap_master,
+                webauthn_credentials, categories, passwords, cards
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+            ON CONFLICT (user_id) DO UPDATE SET
+                master_hash = EXCLUDED.master_hash,
+                vault_salt = EXCLUDED.vault_salt,
+                vault_version = EXCLUDED.vault_version,
+                vault_key_wrap_master = EXCLUDED.vault_key_wrap_master,
+                webauthn_credentials = EXCLUDED.webauthn_credentials,
+                categories = EXCLUDED.categories,
+                passwords = EXCLUDED.passwords,
+                cards = EXCLUDED.cards`,
+            [
+                userId,
+                masterHash,
+                vaultSalt,
+                vaultVersion,
+                vaultKeyWrapMaster ? JSON.stringify(vaultKeyWrapMaster) : null,
+                JSON.stringify(nextCredentials),
+                JSON.stringify(nextCategories),
+                JSON.stringify(nextPasswords),
+                JSON.stringify(nextCards),
+            ]
+        );
+    }
+
+    return {
+        userId,
+        masterHash,
+        vaultSalt,
+        vaultVersion,
+        vaultKeyWrapMaster,
+        webauthnCredentials: nextCredentials,
+        categories: nextCategories,
+        passwords: nextPasswords,
+        cards: nextCards,
+    };
+}
+
 // Status
 app.get('/api/status', async (req, res) => {
     try {
@@ -216,10 +417,17 @@ app.post('/api/setup', async (req, res) => {
         const check = await loadVault();
         if (check) return res.status(400).json({ error: 'Cofre já existe.' });
 
-        await pool.query(
-            'INSERT INTO vault (user_id, master_hash, vault_salt, vault_version, vault_key_wrap_master, webauthn_credentials, categories, passwords, cards) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)',
-            [USER_ID, hash, salt || null, 2, vaultKeyWrapMaster || null, '[]', '[]', '[]', '[]']
-        );
+        await persistVaultRecord({
+            userId: USER_ID,
+            masterHash: hash,
+            vaultSalt: salt || null,
+            vaultVersion: 2,
+            vaultKeyWrapMaster: vaultKeyWrapMaster || null,
+            webauthnCredentials: [],
+            categories: [],
+            passwords: [],
+            cards: [],
+        });
         res.json({ success: true });
     } catch (err) {
         res.status(500).json({ error: err.message });
@@ -236,8 +444,8 @@ app.post('/api/login', async (req, res) => {
 
         res.json({
             categories: sortCategories(normalizeJson(vault.categories, [])),
-            passwords: vault.passwords,
-            cards: vault.cards,
+            passwords: normalizeJson(vault.passwords, []),
+            cards: normalizeJson(vault.cards, []),
             vaultSalt: vault.vault_salt || null,
             vaultVersion: vault.vault_version || 1,
             vaultKeyWrapMaster: vault.vault_key_wrap_master || null,
@@ -260,21 +468,17 @@ app.put('/api/sync', async (req, res) => {
         const nextCredentials = typeof webauthnCredentials === 'undefined'
             ? getCredentials(vault)
             : normalizeJson(webauthnCredentials, []);
-        const nextCategories = sortCategories(normalizeJson(categories, []));
-
-        await pool.query(
-            'UPDATE vault SET categories = $1, passwords = $2, cards = $3, vault_salt = $4, vault_version = $5, vault_key_wrap_master = $6, webauthn_credentials = $7 WHERE user_id = $8',
-            [
-                JSON.stringify(nextCategories),
-                JSON.stringify(passwords),
-                JSON.stringify(cards),
-                vaultSalt || vault.vault_salt || null,
-                nextVersion,
-                nextWrap ? JSON.stringify(nextWrap) : null,
-                JSON.stringify(nextCredentials),
-                USER_ID,
-            ]
-        );
+        await persistVaultRecord({
+            userId: USER_ID,
+            masterHash: vault.master_hash,
+            vaultSalt: vaultSalt || vault.vault_salt || null,
+            vaultVersion: nextVersion,
+            vaultKeyWrapMaster: nextWrap || null,
+            webauthnCredentials: nextCredentials,
+            categories,
+            passwords,
+            cards,
+        });
         res.json({ success: true });
     } catch (err) {
         res.status(err.status || 500).json({ error: err.message });
@@ -303,19 +507,17 @@ app.post('/api/migrate', async (req, res) => {
         const nextCredentials = typeof webauthnCredentials === 'undefined'
             ? getCredentials(vault)
             : normalizeJson(webauthnCredentials, []);
-        await pool.query(
-            'UPDATE vault SET master_hash = $1, vault_salt = $2, vault_version = 2, vault_key_wrap_master = $3, categories = $4, passwords = $5, cards = $6, webauthn_credentials = $7 WHERE user_id = $8',
-            [
-                newHash,
-                salt,
-                vaultKeyWrapMaster ? JSON.stringify(vaultKeyWrapMaster) : null,
-                JSON.stringify(nextCategories),
-                JSON.stringify(passwords),
-                JSON.stringify(cards),
-                JSON.stringify(nextCredentials),
-                USER_ID,
-            ]
-        );
+        await persistVaultRecord({
+            userId: USER_ID,
+            masterHash: newHash,
+            vaultSalt: salt,
+            vaultVersion: 2,
+            vaultKeyWrapMaster: vaultKeyWrapMaster || null,
+            webauthnCredentials: nextCredentials,
+            categories: nextCategories,
+            passwords,
+            cards,
+        });
 
         res.json({ success: true });
     } catch (err) {
@@ -409,10 +611,17 @@ app.post('/api/passkeys/register/verify', async (req, res) => {
             credentialBackedUp,
         });
 
-        await pool.query(
-            'UPDATE vault SET webauthn_credentials = $1 WHERE user_id = $2',
-            [JSON.stringify(credentials), USER_ID]
-        );
+        await persistVaultRecord({
+            userId: USER_ID,
+            masterHash: vault.master_hash,
+            vaultSalt: vault.vault_salt || null,
+            vaultVersion: vault.vault_version || 1,
+            vaultKeyWrapMaster: vault.vault_key_wrap_master || null,
+            webauthnCredentials: credentials,
+            categories: normalizeJson(vault.categories, []),
+            passwords: normalizeJson(vault.passwords, []),
+            cards: normalizeJson(vault.cards, []),
+        });
 
         const created = credentials.find((cred) => cred.id === credential.id);
         pendingWebAuthn.registration = null;
@@ -486,10 +695,17 @@ app.post('/api/passkeys/finish/verify', async (req, res) => {
         });
         const updatedCredential = credentials.find((cred) => cred.id === credentialId);
 
-        await pool.query(
-            'UPDATE vault SET webauthn_credentials = $1 WHERE user_id = $2',
-            [JSON.stringify(credentials), USER_ID]
-        );
+        await persistVaultRecord({
+            userId: USER_ID,
+            masterHash: vault.master_hash,
+            vaultSalt: vault.vault_salt || null,
+            vaultVersion: vault.vault_version || 1,
+            vaultKeyWrapMaster: vault.vault_key_wrap_master || null,
+            webauthnCredentials: credentials,
+            categories: normalizeJson(vault.categories, []),
+            passwords: normalizeJson(vault.passwords, []),
+            cards: normalizeJson(vault.cards, []),
+        });
 
         pendingWebAuthn.finalize = null;
         res.json({ success: true, credential: updatedCredential });
@@ -595,10 +811,17 @@ app.post('/api/passkeys/disable', async (req, res) => {
         const vault = await loadVault();
         verifyMasterHash(vault, hash);
 
-        await pool.query(
-            'UPDATE vault SET webauthn_credentials = $1 WHERE user_id = $2',
-            [JSON.stringify([]), USER_ID]
-        );
+        await persistVaultRecord({
+            userId: USER_ID,
+            masterHash: vault.master_hash,
+            vaultSalt: vault.vault_salt || null,
+            vaultVersion: vault.vault_version || 1,
+            vaultKeyWrapMaster: vault.vault_key_wrap_master || null,
+            webauthnCredentials: [],
+            categories: normalizeJson(vault.categories, []),
+            passwords: normalizeJson(vault.passwords, []),
+            cards: normalizeJson(vault.cards, []),
+        });
 
         res.json({ success: true });
     } catch (err) {
