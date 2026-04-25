@@ -157,6 +157,11 @@ const TRANSLATIONS = {
     bitwardenImportToOther: 'Importar para Other',
     bitwardenImportClear: 'Limpar importação',
     bitwardenImportNoFile: 'Seleciona um CSV exportado do Bitwarden para continuar.',
+    removeOtherDuplicates: 'Eliminar duplicados em Other',
+    removeOtherDuplicatesHint: 'Remove itens repetidos dentro da pasta Other.',
+    removeOtherDuplicatesDone: 'Duplicados em Other removidos.',
+    removeOtherDuplicatesNone: 'Não encontrei duplicados em Other.',
+    removeOtherDuplicatesConfirm: 'Eliminar entradas duplicadas dentro de Other?',
   },
   en: {
     welcome: 'Welcome to PassVault',
@@ -268,6 +273,11 @@ const TRANSLATIONS = {
     bitwardenImportToOther: 'Import to Other',
     bitwardenImportClear: 'Clear import',
     bitwardenImportNoFile: 'Select a Bitwarden CSV export to continue.',
+    removeOtherDuplicates: 'Remove duplicates in Other',
+    removeOtherDuplicatesHint: 'Removes repeated items inside the Other folder.',
+    removeOtherDuplicatesDone: 'Duplicates in Other removed.',
+    removeOtherDuplicatesNone: 'No duplicates found in Other.',
+    removeOtherDuplicatesConfirm: 'Remove duplicate entries inside Other?',
   },
   es: {
     welcome: 'Bienvenido a PassVault',
@@ -379,6 +389,11 @@ const TRANSLATIONS = {
     bitwardenImportToOther: 'Importar a Other',
     bitwardenImportClear: 'Limpiar importación',
     bitwardenImportNoFile: 'Selecciona un CSV exportado de Bitwarden para continuar.',
+    removeOtherDuplicates: 'Eliminar duplicados en Other',
+    removeOtherDuplicatesHint: 'Elimina elementos repetidos dentro de la carpeta Other.',
+    removeOtherDuplicatesDone: 'Duplicados en Other eliminados.',
+    removeOtherDuplicatesNone: 'No encontré duplicados en Other.',
+    removeOtherDuplicatesConfirm: '¿Eliminar entradas duplicadas dentro de Other?',
   }
 };
 
@@ -991,6 +1006,38 @@ const normalizePasswordImportKey = (item = {}) => {
     [title, '', host].join('|'),
     ['', username, host].join('|'),
   ].filter((value, index, array) => value && array.indexOf(value) === index);
+};
+
+const buildPasswordDedupeKey = (item = {}) => {
+  const title = normalizeText(item.title || '');
+  const username = normalizeText(item.username || '');
+  const host = normalizeText(getHostname(item.url || ''));
+  const rawUrl = normalizeText(item.url || '');
+  return [title, username, host || rawUrl].join('|');
+};
+
+const dedupePasswordsByCategory = (records = [], categoryName = 'Other') => {
+  const seen = new Set();
+  const removed = [];
+  const kept = [];
+
+  (Array.isArray(records) ? records : []).forEach((record) => {
+    if ((record?.category || '') !== categoryName) {
+      kept.push(record);
+      return;
+    }
+
+    const key = buildPasswordDedupeKey(record);
+    if (!key || seen.has(key)) {
+      removed.push(record);
+      return;
+    }
+
+    seen.add(key);
+    kept.push(record);
+  });
+
+  return { kept, removed };
 };
 
 const findPasswordImportMatch = (item = {}, existing = []) => {
@@ -2334,6 +2381,12 @@ const PasswordManager = () => {
     return passwords.filter((p) => p.category === selectedCategory && matchesSearchTerms(passwordSearchFields(p), globalTerms)).length;
   }, [passwords, selectedCategory, globalTerms]);
 
+  const otherDuplicatesCount = useMemo(() => {
+    if (selectedCategory !== 'Other') return 0;
+    const { removed } = dedupePasswordsByCategory(passwords, 'Other');
+    return removed.length;
+  }, [passwords, selectedCategory]);
+
   const categoryMatchesSearch = useCallback((categoryName) => {
     if (!globalTerms.length) return true;
     if (matchesSearchTerms([categoryName], globalTerms)) return true;
@@ -2369,6 +2422,31 @@ const PasswordManager = () => {
       setForm({ title: '', url: '', username: '', password: '', notes: '', category: selectedCategory || 'Other', favorite: false });
     }
     setIsModalOpen(true);
+  };
+
+  const handleRemoveOtherDuplicates = async () => {
+    const { kept, removed } = dedupePasswordsByCategory(passwords, 'Other');
+    if (!removed.length) {
+      showToast(t('removeOtherDuplicatesNone'));
+      return;
+    }
+
+    if (!window.confirm(`${t('removeOtherDuplicatesConfirm')} ${removed.length} ${t('items')}.`)) return;
+
+    const nextPasswords = kept;
+    setPasswords(nextPasswords);
+    if (selectedCategory === 'Other') {
+      setDetailItem(null);
+    }
+
+    try {
+      await persistVault(categories, nextPasswords);
+      showToast(`${removed.length} ${t('items')} · ${t('removeOtherDuplicatesDone')}`);
+    } catch (error) {
+      setPasswords(passwords);
+      showToast('Não foi possível gravar a limpeza de duplicados.');
+      console.error(error);
+    }
   };
 
   const persistVault = async (nextCategories, nextPasswords) => {
@@ -2683,6 +2761,11 @@ const PasswordManager = () => {
               <Button onClick={() => handleOpenModal()} icon={Plus} className="w-full rounded-2xl px-5 sm:w-auto">
                 {t('addPassword')}
               </Button>
+              {selectedCategory === 'Other' && (
+                <Button onClick={handleRemoveOtherDuplicates} variant="secondary" icon={Trash} className="w-full rounded-2xl px-5 sm:w-auto">
+                  {t('removeOtherDuplicates')}
+                </Button>
+              )}
             </div>
 
             <div className="grid gap-3 lg:grid-cols-[1fr_auto]">
@@ -3661,7 +3744,6 @@ const SettingsScreen = () => {
       setCategories(nextCategories);
       sessionStorage.setItem(PASSWORDS_PENDING_CATEGORY_KEY, 'Other');
       setActiveTab('passwords');
-      setDetailItem(null);
       await persistVault(nextCategories, nextPasswords);
       showToast(`Importados ${created} registos${replaced ? `, ${replaced} substituídos` : ''}${ignored ? `, ${ignored} ignorados` : ''}.`);
       resetBitwardenImport();
