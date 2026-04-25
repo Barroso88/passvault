@@ -1505,7 +1505,8 @@ const resolveFaviconCandidates = async (url) => {
       const data = await res.json().catch(() => ({}));
       const candidates = Array.isArray(data?.candidates) ? data.candidates.filter(Boolean) : [];
       if (candidates.length) {
-        const unique = [...new Set(candidates)];
+        const proxyCandidates = candidates.map((candidate) => `${API_URL}/favicon/proxy?src=${encodeURIComponent(candidate)}`);
+        const unique = [...new Set([...proxyCandidates, ...candidates])];
         faviconCache.set(cacheKey, unique);
         return unique;
       }
@@ -1514,7 +1515,11 @@ const resolveFaviconCandidates = async (url) => {
     // fall through to local fallback
   }
 
-  const uniqueCandidates = [...new Set(buildFaviconCandidates(parsed.toString()).filter(Boolean))];
+  const localCandidates = buildFaviconCandidates(parsed.toString()).filter(Boolean);
+  const uniqueCandidates = [...new Set([
+    ...localCandidates.map((candidate) => `${API_URL}/favicon/proxy?src=${encodeURIComponent(candidate)}`),
+    ...localCandidates,
+  ])];
   faviconCache.set(cacheKey, uniqueCandidates);
   return uniqueCandidates;
 };
@@ -1530,7 +1535,7 @@ const getFaviconLabel = (title, url) => {
   return source ? source.charAt(0).toUpperCase() : '';
 };
 
-const Favicon = ({ url, title, sizeClass = 'h-8 w-8', imageClassName = 'block max-h-full max-w-full object-contain', fallbackClassName = 'flex h-full w-full items-center justify-center text-sm font-bold text-[var(--primary)]/90', fallbackIcon: FallbackIcon = Globe }) => {
+const Favicon = ({ url, title, sizeClass = 'h-8 w-8', imageClassName = 'block max-h-[72%] max-w-[72%] object-contain', fallbackClassName = 'flex h-full w-full items-center justify-center text-sm font-bold text-[var(--primary)]/90', fallbackIcon: FallbackIcon = Globe }) => {
   const [candidates, setCandidates] = useState([]);
   const [candidateIndex, setCandidateIndex] = useState(0);
   const [failed, setFailed] = useState(false);

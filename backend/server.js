@@ -723,6 +723,33 @@ app.get('/api/favicon', async (req, res) => {
     }
 });
 
+app.get('/api/favicon/proxy', async (req, res) => {
+    try {
+        const source = String(req.query.src || '').trim();
+        const parsed = source ? new URL(source) : null;
+        if (!parsed) {
+            return res.status(400).json({ error: 'URL inválido.' });
+        }
+
+        const response = await fetch(parsed.toString(), {
+            cache: 'force-cache',
+            headers: faviconFetchHeaders,
+        });
+
+        if (!response.ok) {
+            return res.status(response.status).json({ error: 'Falha ao obter ícone.' });
+        }
+
+        const contentType = response.headers.get('content-type') || 'image/png';
+        const buffer = Buffer.from(await response.arrayBuffer());
+        res.setHeader('Content-Type', contentType);
+        res.setHeader('Cache-Control', 'public, max-age=86400');
+        res.send(buffer);
+    } catch (err) {
+        res.status(500).json({ error: err.message || 'Falha ao proxy do favicon.' });
+    }
+});
+
 async function startRegistrationRequest({ identifier, hash, salt, vaultKeyWrapMaster }) {
     const normalized = normalizeEmail(identifier);
     if (!normalized || !isValidEmail(normalized)) {
