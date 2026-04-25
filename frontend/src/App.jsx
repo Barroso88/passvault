@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useContext, createContext, useMemo, useRef, useCallback } from 'react';
 import { Capacitor } from '@capacitor/core';
+import { App as CapacitorApp } from '@capacitor/app';
 import { startRegistration, startAuthentication, base64URLStringToBuffer } from '@simplewebauthn/browser';
 import { BiometricAuth, AndroidBiometryStrength } from '@aparajita/capacitor-biometric-auth';
 import { SecureStorage } from '@aparajita/capacitor-secure-storage';
@@ -1168,6 +1169,7 @@ const AppProvider = ({ children }) => {
   const [quickCreate, setQuickCreate] = useState(null);
   const [quickEdit, setQuickEdit] = useState(null);
   const [toast, setToast] = useState(null);
+  const screenBackHandlerRef = useRef(null);
 
   // Guardar apenas configs no localstorage
   useEffect(() => { localStorage.setItem('pv_theme', theme); }, [theme]);
@@ -1329,6 +1331,25 @@ const AppProvider = ({ children }) => {
     showToast(t('copied'));
   };
 
+  const registerScreenBackHandler = useCallback((handler) => {
+    screenBackHandlerRef.current = handler;
+    return () => {
+      if (screenBackHandlerRef.current === handler) {
+        screenBackHandlerRef.current = null;
+      }
+    };
+  }, []);
+
+  const triggerScreenBackHandler = useCallback(() => {
+    if (typeof screenBackHandlerRef.current !== 'function') return false;
+    try {
+      return !!screenBackHandlerRef.current();
+    } catch (error) {
+      console.error('Falha no handler de back screen:', error);
+      return false;
+    }
+  }, []);
+
   const contextValue = {
     theme, setTheme, lang, setLang, timeoutMinutes, setTimeoutMinutes,
     isLocked, setIsLocked, userId, setUserId, masterHash, setMasterHash, vaultSalt, setVaultSalt, vaultVersion, setVaultVersion, vaultKey, setVaultKey, vaultKeyRaw, setVaultKeyRaw, vaultKeyWrapMaster, setVaultKeyWrapMaster, hasPasskeys, setHasPasskeys, passkeyCredentials, setPasskeyCredentials,
@@ -1339,6 +1360,8 @@ const AppProvider = ({ children }) => {
     quickCreate, setQuickCreate,
     quickEdit, setQuickEdit,
     nativeBiometricsEnabled, setNativeBiometricsEnabled,
+    registerScreenBackHandler,
+    triggerScreenBackHandler,
     syncVault,
     t, showToast, copyToClipboard
   };
@@ -2383,7 +2406,7 @@ const Dashboard = () => {
 };
 
 const PasswordManager = () => {
-  const { passwords, setPasswords, cards, categories, setCategories, syncVault, t, copyToClipboard, showToast, globalSearch } = useContext(AppContext);
+  const { passwords, setPasswords, cards, categories, setCategories, syncVault, t, copyToClipboard, showToast, globalSearch, registerScreenBackHandler } = useContext(AppContext);
   const [search, setSearch] = useState('');
   const [selectedCategory, setSelectedCategory] = useState(() => sessionStorage.getItem(PASSWORDS_PENDING_CATEGORY_KEY) || null);
   const [detailItem, setDetailItem] = useState(null);
@@ -2453,6 +2476,29 @@ const PasswordManager = () => {
     setSelectedCategory((current) => (current === bestGlobalMatch.category ? current : bestGlobalMatch.category));
     setDetailItem(null);
   }, [bestGlobalMatch, globalTerms.length]);
+
+  useEffect(() => registerScreenBackHandler(() => {
+    if (detailItem) {
+      setDetailItem(null);
+      return true;
+    }
+    if (isModalOpen) {
+      setIsModalOpen(false);
+      return true;
+    }
+    if (isCatModalOpen) {
+      setIsCatModalOpen(false);
+      return true;
+    }
+    if (selectedCategory) {
+      setSelectedCategory(null);
+      setSearch('');
+      setDetailItem(null);
+      sessionStorage.removeItem(PASSWORDS_PENDING_CATEGORY_KEY);
+      return true;
+    }
+    return false;
+  }), [registerScreenBackHandler, detailItem, isModalOpen, isCatModalOpen, selectedCategory]);
 
 
   const handleOpenModal = (item = null) => {
@@ -3052,7 +3098,7 @@ const PasswordManager = () => {
 };
 
 const CardManager = () => {
-  const { cards, setCards, t, copyToClipboard, globalSearch } = useContext(AppContext);
+  const { cards, setCards, t, copyToClipboard, globalSearch, registerScreenBackHandler } = useContext(AppContext);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingItem, setEditingItem] = useState(null);
   const globalTerms = useMemo(() => splitSearchTerms(globalSearch), [globalSearch]);
@@ -3084,6 +3130,14 @@ const CardManager = () => {
   const filteredCards = useMemo(() => (
     cards.filter((card) => matchesSearchTerms(cardSearchFields(card), globalTerms))
   ), [cards, globalTerms]);
+
+  useEffect(() => registerScreenBackHandler(() => {
+    if (isModalOpen) {
+      setIsModalOpen(false);
+      return true;
+    }
+    return false;
+  }), [registerScreenBackHandler, isModalOpen]);
 
   // Visual Card Component
   const VisualCard = ({ card, onClick }) => {
@@ -3618,7 +3672,7 @@ const SettingsScreen = () => {
     t, showToast,
     setIsLocked, setMasterHash, setVaultKey, setVaultKeyRaw, setVaultKeyWrapMaster, setVaultSalt, setVaultVersion, setActiveTab,
     userId, masterHash, vaultSalt, vaultVersion, vaultKey, vaultKeyRaw, vaultKeyWrapMaster, passwords, setPasswords, cards, setCards, categories, setCategories,
-    passkeyCredentials, setPasskeyCredentials, hasPasskeys, setHasPasskeys, nativeBiometricsEnabled, setNativeBiometricsEnabled, syncVault,
+    passkeyCredentials, setPasskeyCredentials, hasPasskeys, setHasPasskeys, nativeBiometricsEnabled, setNativeBiometricsEnabled, syncVault, registerScreenBackHandler,
   } = useContext(AppContext);
   const [isMasterModalOpen, setIsMasterModalOpen] = useState(false);
   const [currentMasterPwd, setCurrentMasterPwd] = useState('');
@@ -3803,6 +3857,14 @@ const SettingsScreen = () => {
     setConfirmNewMasterPwd('');
     setMasterChangeError('');
   };
+
+  useEffect(() => registerScreenBackHandler(() => {
+    if (isMasterModalOpen) {
+      closeMasterModal();
+      return true;
+    }
+    return false;
+  }), [registerScreenBackHandler, isMasterModalOpen]);
 
   const handleExportBackup = async () => {
     if (!backupPassword || backupPassword.length < 8) {
@@ -4565,6 +4627,11 @@ const MainLayout = () => {
     passwords,
     cards,
     categories,
+    quickCreate,
+    setQuickCreate,
+    quickEdit,
+    setQuickEdit,
+    triggerScreenBackHandler,
   } = useContext(AppContext);
   const globalTerms = useMemo(() => splitSearchTerms(globalSearch), [globalSearch]);
 
@@ -4599,6 +4666,49 @@ const MainLayout = () => {
     setVaultSalt(null);
     sessionStorage.removeItem('pv_master_hash');
   };
+
+  useEffect(() => {
+    if (!IS_ANDROID_NATIVE || PREVIEW_MODE) return undefined;
+
+    let isActive = true;
+    let listenerHandle = null;
+
+    const registerBackButton = async () => {
+      listenerHandle = await CapacitorApp.addListener('backButton', () => {
+        if (quickCreate) {
+          setQuickCreate(null);
+          return;
+        }
+        if (quickEdit) {
+          setQuickEdit(null);
+          return;
+        }
+        if (triggerScreenBackHandler()) {
+          return;
+        }
+        if (activeTab !== 'dashboard') {
+          setActiveTab('dashboard');
+          return;
+        }
+        CapacitorApp.exitApp();
+      });
+
+      if (!isActive && listenerHandle) {
+        await listenerHandle.remove();
+      }
+    };
+
+    registerBackButton().catch((error) => {
+      console.error('Falha ao registar back button Android:', error);
+    });
+
+    return () => {
+      isActive = false;
+      if (listenerHandle) {
+        listenerHandle.remove();
+      }
+    };
+  }, [activeTab, quickCreate, quickEdit, setActiveTab, setQuickCreate, setQuickEdit, triggerScreenBackHandler]);
 
   return (
     <div className="flex h-screen bg-[var(--bg)] text-[var(--text)] overflow-hidden font-sans">
