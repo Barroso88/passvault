@@ -1497,20 +1497,24 @@ const resolveFaviconCandidates = async (url) => {
     return faviconCache.get(cacheKey);
   }
 
-  const candidates = buildFaviconCandidates(parsed.toString());
-  const resolvedCandidates = [];
-  for (const candidate of candidates) {
-    if (candidate.endsWith('manifest.json')) {
-      const manifestIcons = await readManifestIcons(candidate);
-      if (manifestIcons.length) {
-        resolvedCandidates.push(...manifestIcons);
+  try {
+    const res = await fetch(`${API_URL}/favicon?url=${encodeURIComponent(parsed.toString())}`, {
+      cache: 'force-cache',
+    });
+    if (res.ok) {
+      const data = await res.json().catch(() => ({}));
+      const candidates = Array.isArray(data?.candidates) ? data.candidates.filter(Boolean) : [];
+      if (candidates.length) {
+        const unique = [...new Set(candidates)];
+        faviconCache.set(cacheKey, unique);
+        return unique;
       }
-      continue;
     }
-    resolvedCandidates.push(candidate);
+  } catch {
+    // fall through to local fallback
   }
 
-  const uniqueCandidates = [...new Set(resolvedCandidates.filter(Boolean))];
+  const uniqueCandidates = [...new Set(buildFaviconCandidates(parsed.toString()).filter(Boolean))];
   faviconCache.set(cacheKey, uniqueCandidates);
   return uniqueCandidates;
 };

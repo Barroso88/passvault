@@ -463,6 +463,126 @@ function currentOrigin(req) {
     return req.headers.origin || WEBAUTHN_ORIGIN;
 }
 
+function normalizeSiteUrl(value = '') {
+    const raw = String(value || '').trim();
+    if (!raw) return null;
+    try {
+        return new URL(raw.startsWith('http') ? raw : `https://${raw}`);
+    } catch {
+        return null;
+    }
+}
+
+function dedupeOrdered(values = []) {
+    return [...new Set((Array.isArray(values) ? values : []).filter(Boolean))];
+}
+
+function scoreIconHref(href = '') {
+    const value = String(href || '').toLowerCase();
+    if (value.includes('maskable')) return 3000;
+    if (value.includes('apple-touch-icon')) return 2500;
+    if (value.endsWith('.svg')) return 2200;
+    if (value.endsWith('.png')) return 1800;
+    if (value.endsWith('.ico')) return 1600;
+    return 1000;
+}
+
+function parseIconLinksFromHtml(html = '', baseUrl = '') {
+    if (!html) return [];
+    const links = [];
+    const patterns = [
+        /<link\b[^>]*rel=["'][^"']*icon[^"']*["'][^>]*href=["']([^"']+)["'][^>]*>/gi,
+        /<link\b[^>]*rel=["'][^"']*shortcut icon[^"']*["'][^>]*href=["']([^"']+)["'][^>]*>/gi,
+        /<link\b[^>]*rel=["'][^"']*apple-touch-icon[^"']*["'][^>]*href=["']([^"']+)["'][^>]*>/gi,
+        /<link\b[^>]*rel=["'][^"']*manifest[^"']*["'][^>]*href=["']([^"']+)["'][^>]*>/gi,
+    ];
+
+    for (const pattern of patterns) {
+        let match;
+        while ((match = pattern.exec(html)) !== null) {
+            try {
+                links.push(new URL(match[1], baseUrl).toString());
+            } catch {
+                // ignore invalid href
+            }
+        }
+    }
+
+    return links;
+}
+
+async function readManifestIcons(manifestUrl) {
+    try {
+        const res = await fetch(manifestUrl, { cache: 'force-cache' });
+        if (!res.ok) return [];
+        const manifest = await res.json().catch(() => null);
+        const icons = Array.isArray(manifest?.icons) ? manifest.icons : [];
+        return icons
+            .filter((entry) => entry?.src)
+            .map((entry) => {
+                const sizeScore = String(entry.sizes || '')
+                    .split(/\s+/)
+                    .map((size) => {
+                        const [width, height] = size.split('x').map((value) => Number.parseInt(value, 10));
+                        return Number.isFinite(width) && Number.isFinite(height) ? Math.max(width, height) : 0;
+                    })
+                    .reduce((max, value) => Math.max(max, value), 0);
+                const typeScore = String(entry.type || '').includes('svg') ? 5000 : 0;
+                const purposeScore = String(entry.purpose || '').includes('maskable') ? 2000 : 0;
+                return {
+                    href: new URL(entry.src, manifestUrl).toString(),
+                    score: sizeScore + typeScore + purposeScore + scoreIconHref(entry.src),
+                };
+            })
+            .sort((a, b) => b.score - a.score)
+            .map((entry) => entry.href);
+    } catch {
+        return [];
+    }
+}
+
+async function resolveFaviconCandidates(url = '') {
+    const parsed = normalizeSiteUrl(url);
+    if (!parsed) return [];
+
+    const origin = parsed.origin;
+    const host = parsed.hostname;
+    const candidates = [
+        `https://www.google.com/s2/favicons?domain=${host}&sz=64`,
+        `${origin}/favicon.ico`,
+        `${origin}/apple-touch-icon.png`,
+        `${origin}/apple-touch-icon-precomposed.png`,
+    ];
+
+    try {
+        const res = await fetch(parsed.toString(), { cache: 'force-cache' });
+        if (res.ok) {
+            const html = await res.text();
+            const discovered = parseIconLinksFromHtml(html, parsed.toString());
+            candidates.push(...discovered);
+
+            for (const candidate of discovered.filter((item) => /manifest(\.json)?(\?.*)?$/i.test(item))) {
+                const manifestIcons = await readManifestIcons(candidate);
+                candidates.push(...manifestIcons);
+            }
+
+            const ogImageMatch = html.match(/<meta\b[^>]*property=["']og:image["'][^>]*content=["']([^"']+)["'][^>]*>/i)
+              || html.match(/<meta\b[^>]*content=["']([^"']+)["'][^>]*property=["']og:image["'][^>]*>/i);
+            if (ogImageMatch?.[1]) {
+                try {
+                    candidates.push(new URL(ogImageMatch[1], parsed.toString()).toString());
+                } catch {
+                    // ignore invalid og:image
+                }
+            }
+        }
+    } catch {
+        // ignore network issues; caller will fall back locally
+    }
+
+    return dedupeOrdered(candidates);
+}
+
 async function persistVaultRecord({
     userId = USER_ID,
     masterHash,
@@ -586,6 +706,15 @@ app.get('/api/status', async (req, res) => {
         });
     } catch (err) {
         res.status(500).json({ error: err.message });
+    }
+});
+
+app.get('/api/favicon', async (req, res) => {
+    try {
+        const candidates = await resolveFaviconCandidates(req.query.url || '');
+        res.json({ candidates });
+    } catch (err) {
+        res.status(500).json({ error: err.message || 'Falha ao resolver favicon.' });
     }
 });
 
