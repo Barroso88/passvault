@@ -166,11 +166,41 @@ The signed APK is produced at:
 frontend/android/app/build/outputs/apk/release/app-release.apk
 ```
 
+### Automatic GitHub release APKs
+
+You can publish a signed Android APK automatically by pushing a tag that matches `android-apk-*`.
+
+Required GitHub repository secrets:
+
+- `ANDROID_KEYSTORE_BASE64`
+- `ANDROID_KEYSTORE_PASSWORD`
+- `ANDROID_KEY_ALIAS`
+- `ANDROID_KEY_PASSWORD`
+
+To create the keystore secret payload locally:
+
+```bash
+base64 -i frontend/android/passvault-release.jks | pbcopy
+```
+
+Then store the copied value in `ANDROID_KEYSTORE_BASE64` and set the other three secrets from your local `frontend/android/keystore.properties` values.
+
+Workflow file:
+
+- [`.github/workflows/publish-android-apk.yml`](./.github/workflows/publish-android-apk.yml)
+
+Tag example:
+
+- `android-apk-1.0.27-signed`
+
+The workflow builds the release APK and uploads it to the GitHub Release for that tag.
+
 ## Files of interest
 
 - [`backend/server.js`](./backend/server.js)
 - [`frontend/src/App.jsx`](./frontend/src/App.jsx)
 - [`Dockerfile`](./Dockerfile)
 - [`.github/workflows/publish-ghcr.yml`](./.github/workflows/publish-ghcr.yml)
+- [`.github/workflows/publish-android-apk.yml`](./.github/workflows/publish-android-apk.yml)
 - [`docker-compose.yml`](./docker-compose.yml)
 - [`docker-compose.ghcr.yml`](./docker-compose.ghcr.yml)
