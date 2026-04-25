@@ -191,7 +191,7 @@ Workflow file:
 
 Tag example:
 
-- `android-apk-1.0.34-signed`
+- `android-apk-1.0.35-signed`
 
 The workflow builds the release APK and uploads it to the GitHub Release for that tag.
 
