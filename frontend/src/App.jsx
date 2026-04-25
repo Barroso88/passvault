@@ -549,6 +549,13 @@ const normalizeStorageScope = (value = '') => {
 };
 
 const getVaultStorageScope = (userId = '', identifier = '') => normalizeStorageScope(userId || identifier || 'global');
+const getVaultStorageScopes = (userId = '', identifier = '') => {
+  const scopes = [userId, identifier]
+    .map((value) => String(value || '').trim())
+    .filter(Boolean)
+    .map((value) => normalizeStorageScope(value));
+  return scopes.length ? [...new Set(scopes)] : ['global'];
+};
 const getPersistedAuthIdentifier = () => sessionStorage.getItem('pv_auth_identifier') || localStorage.getItem(LAST_AUTH_IDENTIFIER_KEY) || '';
 const setPersistedAuthIdentifier = (value = '') => {
   const normalized = String(value || '').trim();
@@ -572,6 +579,21 @@ const readScopedStoredState = (baseKey, scope = 'global', fallback) => {
 
 const writeScopedStoredState = (baseKey, scope = 'global', value) => {
   localStorage.setItem(getScopedStorageKey(baseKey, scope), JSON.stringify(value));
+};
+
+const readFromStorageScopes = (baseKey, scopes = [], fallback) => {
+  for (const scope of scopes) {
+    const value = readScopedStoredState(baseKey, scope, undefined);
+    if (typeof value !== 'undefined') return value;
+  }
+  return fallback;
+};
+
+const writeToStorageScopes = (baseKey, scopes = [], value) => {
+  const uniqueScopes = scopes.length ? [...new Set(scopes.map((scope) => normalizeStorageScope(scope)))] : ['global'];
+  uniqueScopes.forEach((scope) => {
+    writeScopedStoredState(baseKey, scope, value);
+  });
 };
 
 const bytesToBase64 = (bytes) => {
@@ -1118,15 +1140,16 @@ const AppProvider = ({ children }) => {
   const [vaultKey, setVaultKey] = useState(null);
   const [vaultKeyRaw, setVaultKeyRaw] = useState(null);
   const [vaultKeyWrapMaster, setVaultKeyWrapMaster] = useState(null);
+  const persistedAuthIdentifier = PREVIEW_MODE ? '' : getPersistedAuthIdentifier();
   const initialStorageScope = PREVIEW_MODE
     ? 'preview-user'
-    : getVaultStorageScope(sessionStorage.getItem('pv_user_id') || getPersistedAuthIdentifier() || '');
-  const [hasPasskeys, setHasPasskeys] = useState(PREVIEW_MODE ? false : !!readScopedStoredState(PASSKEY_STORAGE_KEYS.hasPasskeys, initialStorageScope, false));
+    : getVaultStorageScope(sessionStorage.getItem('pv_user_id'), persistedAuthIdentifier);
+  const [hasPasskeys, setHasPasskeys] = useState(PREVIEW_MODE ? false : !!readFromStorageScopes(PASSKEY_STORAGE_KEYS.hasPasskeys, getVaultStorageScopes(sessionStorage.getItem('pv_user_id'), persistedAuthIdentifier), false));
   const [passkeyCredentials, setPasskeyCredentials] = useState(
-    PREVIEW_MODE ? [] : readScopedStoredState(PASSKEY_STORAGE_KEYS.credentials, initialStorageScope, [])
+    PREVIEW_MODE ? [] : readFromStorageScopes(PASSKEY_STORAGE_KEYS.credentials, getVaultStorageScopes(sessionStorage.getItem('pv_user_id'), persistedAuthIdentifier), [])
   );
   const [nativeBiometricsEnabled, setNativeBiometricsEnabled] = useState(
-    PREVIEW_MODE ? false : readScopedStoredState(ANDROID_BIOMETRIC_ENABLED_KEY, initialStorageScope, false)
+    PREVIEW_MODE ? false : readFromStorageScopes(ANDROID_BIOMETRIC_ENABLED_KEY, getVaultStorageScopes(sessionStorage.getItem('pv_user_id'), persistedAuthIdentifier), false)
   );
   
   // Estado do Cofre (Agora inicializado vazio, preenchido via Postgres)
@@ -1164,15 +1187,15 @@ const AppProvider = ({ children }) => {
   }, [cards]);
   useEffect(() => {
     if (PREVIEW_MODE) return;
-    writeScopedStoredState(PASSKEY_STORAGE_KEYS.hasPasskeys, getVaultStorageScope(userId), !!hasPasskeys);
+    writeToStorageScopes(PASSKEY_STORAGE_KEYS.hasPasskeys, getVaultStorageScopes(userId, getPersistedAuthIdentifier()), !!hasPasskeys);
   }, [hasPasskeys, userId]);
   useEffect(() => {
     if (PREVIEW_MODE) return;
-    writeScopedStoredState(PASSKEY_STORAGE_KEYS.credentials, getVaultStorageScope(userId), passkeyCredentials);
+    writeToStorageScopes(PASSKEY_STORAGE_KEYS.credentials, getVaultStorageScopes(userId, getPersistedAuthIdentifier()), passkeyCredentials);
   }, [passkeyCredentials, userId]);
   useEffect(() => {
     if (PREVIEW_MODE) return;
-    writeScopedStoredState(ANDROID_BIOMETRIC_ENABLED_KEY, getVaultStorageScope(userId), !!nativeBiometricsEnabled);
+    writeToStorageScopes(ANDROID_BIOMETRIC_ENABLED_KEY, getVaultStorageScopes(userId, getPersistedAuthIdentifier()), !!nativeBiometricsEnabled);
   }, [nativeBiometricsEnabled, userId]);
   useEffect(() => {
     if (PREVIEW_MODE) return;
@@ -1185,10 +1208,10 @@ const AppProvider = ({ children }) => {
 
   useEffect(() => {
     if (PREVIEW_MODE) return;
-    const scope = getVaultStorageScope(userId);
-    const storedPasskeys = readScopedStoredState(PASSKEY_STORAGE_KEYS.credentials, scope, []);
-    const storedHasPasskeys = readScopedStoredState(PASSKEY_STORAGE_KEYS.hasPasskeys, scope, null);
-    const storedNativeBiometrics = readScopedStoredState(ANDROID_BIOMETRIC_ENABLED_KEY, scope, null);
+    const scopes = getVaultStorageScopes(userId, getPersistedAuthIdentifier());
+    const storedPasskeys = readFromStorageScopes(PASSKEY_STORAGE_KEYS.credentials, scopes, []);
+    const storedHasPasskeys = readFromStorageScopes(PASSKEY_STORAGE_KEYS.hasPasskeys, scopes, null);
+    const storedNativeBiometrics = readFromStorageScopes(ANDROID_BIOMETRIC_ENABLED_KEY, scopes, null);
     if (Array.isArray(storedPasskeys)) {
       setPasskeyCredentials(storedPasskeys);
       if (typeof storedHasPasskeys === 'boolean') {
