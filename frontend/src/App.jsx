@@ -1427,6 +1427,178 @@ const getFavicon = (url) => {
   } catch { return null; }
 };
 
+const faviconCache = new Map();
+
+const buildFaviconCandidates = (url) => {
+  try {
+    const parsed = new URL(url.startsWith('http') ? url : `https://${url}`);
+    const origin = parsed.origin;
+    const domain = parsed.hostname;
+    const cleanPath = parsed.pathname && parsed.pathname !== '/' ? parsed.pathname.replace(/\/+$/, '') : '';
+    return [
+      `https://www.google.com/s2/favicons?domain=${domain}&sz=64`,
+      `${origin}/favicon.ico`,
+      `${origin}/apple-touch-icon.png`,
+      `${origin}/apple-touch-icon-precomposed.png`,
+      `${origin}/manifest.json`,
+      `${origin}${cleanPath ? `${cleanPath}/` : ''}favicon.ico`,
+    ];
+  } catch {
+    return [];
+  }
+};
+
+const readManifestIcons = async (manifestUrl) => {
+  try {
+    const res = await fetch(manifestUrl, { mode: 'cors', cache: 'force-cache' });
+    if (!res.ok) return [];
+    const manifest = await res.json().catch(() => null);
+    const icons = Array.isArray(manifest?.icons) ? manifest.icons : [];
+    const scoredIcons = icons
+      .filter((entry) => entry?.src)
+      .map((entry) => {
+        const sizes = String(entry.sizes || '')
+          .split(/\s+/)
+          .map((size) => {
+            const [width, height] = size.split('x').map((value) => Number.parseInt(value, 10));
+            return Number.isFinite(width) && Number.isFinite(height) ? Math.max(width, height) : 0;
+          })
+          .filter(Boolean);
+        const hasSvg = String(entry.type || '').includes('svg');
+        const purpose = String(entry.purpose || 'any');
+        let score = Math.max(...sizes, 0);
+        if (hasSvg) score += 10000;
+        if (purpose.includes('maskable')) score += 1000;
+        if (purpose.includes('any')) score += 100;
+        return {
+          src: entry.src.startsWith('http') ? entry.src : new URL(entry.src, manifestUrl).toString(),
+          score,
+        };
+      })
+      .sort((a, b) => b.score - a.score)
+      .map((entry) => entry.src);
+    return scoredIcons;
+  } catch {
+    return [];
+  }
+};
+
+const resolveFaviconCandidates = async (url) => {
+  if (!url) return [];
+  let parsed;
+  try {
+    parsed = new URL(url.startsWith('http') ? url : `https://${url}`);
+  } catch {
+    return [];
+  }
+
+  const cacheKey = parsed.hostname;
+  if (faviconCache.has(cacheKey)) {
+    return faviconCache.get(cacheKey);
+  }
+
+  const candidates = buildFaviconCandidates(parsed.toString());
+  const resolvedCandidates = [];
+  for (const candidate of candidates) {
+    if (candidate.endsWith('manifest.json')) {
+      const manifestIcons = await readManifestIcons(candidate);
+      if (manifestIcons.length) {
+        resolvedCandidates.push(...manifestIcons);
+      }
+      continue;
+    }
+    resolvedCandidates.push(candidate);
+  }
+
+  const uniqueCandidates = [...new Set(resolvedCandidates.filter(Boolean))];
+  faviconCache.set(cacheKey, uniqueCandidates);
+  return uniqueCandidates;
+};
+
+const getFaviconLabel = (title, url) => {
+  const source = (title || '').trim() || (() => {
+    try {
+      return new URL(url.startsWith('http') ? url : `https://${url}`).hostname;
+    } catch {
+      return '';
+    }
+  })();
+  return source ? source.charAt(0).toUpperCase() : '';
+};
+
+const Favicon = ({ url, title, sizeClass = 'h-8 w-8', imageClassName = 'h-full w-full object-contain', fallbackClassName = 'flex h-full w-full items-center justify-center text-sm font-bold text-[var(--primary)]/90', fallbackIcon: FallbackIcon = Globe }) => {
+  const [candidates, setCandidates] = useState([]);
+  const [candidateIndex, setCandidateIndex] = useState(0);
+  const [failed, setFailed] = useState(false);
+
+  useEffect(() => {
+    let active = true;
+    setCandidates([]);
+    setCandidateIndex(0);
+    setFailed(false);
+
+    if (!url) return () => { active = false; };
+
+    let hostname;
+    try {
+      hostname = new URL(url.startsWith('http') ? url : `https://${url}`).hostname;
+    } catch {
+      setFailed(true);
+      return () => { active = false; };
+    }
+
+    const cached = faviconCache.get(hostname);
+    if (Array.isArray(cached) && cached.length) {
+      setCandidates(cached);
+      return () => { active = false; };
+    }
+
+    resolveFaviconCandidates(url).then((resolvedCandidates) => {
+      if (!active) return;
+      setCandidates(resolvedCandidates);
+      setFailed(resolvedCandidates.length === 0);
+    }).catch(() => {
+      if (!active) return;
+      setCandidates([]);
+      setFailed(true);
+    });
+
+    return () => {
+      active = false;
+    };
+  }, [url]);
+
+  const activeSrc = candidates[candidateIndex];
+  const fallbackLabel = getFaviconLabel(title, url);
+
+  if (!activeSrc || failed) {
+    return (
+      <div className={`${sizeClass} shrink-0 overflow-hidden rounded-lg bg-[var(--primary)]/12`}>
+        <div className={`flex h-full w-full items-center justify-center ${fallbackClassName}`}>
+        {fallbackLabel ? <span>{fallbackLabel}</span> : <FallbackIcon size={16} />}
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <img
+      src={activeSrc}
+      alt=""
+      className={`${sizeClass} ${imageClassName} shrink-0 overflow-hidden rounded-lg`}
+      loading="lazy"
+      decoding="async"
+      onError={() => {
+        if (candidateIndex < candidates.length - 1) {
+          setCandidateIndex((index) => index + 1);
+          return;
+        }
+        setFailed(true);
+      }}
+    />
+  );
+};
+
 const getCardType = (number) => {
   const clean = number.replace(/\D/g, '');
   if (clean.startsWith('4')) return 'Visa';
@@ -2305,8 +2477,7 @@ const Dashboard = () => {
           <div className="grid sm:grid-cols-2 gap-3">
             {favorites.map(fav => (
               <div key={fav.id} className="bg-[var(--surface)] p-3 rounded-xl border border-[var(--border)] flex items-center space-x-3 cursor-pointer hover:border-[var(--primary)] transition-colors" onClick={() => setQuickEdit({ type: 'password', item: fav })}>
-                <img src={getFavicon(fav.url)} alt="" className="w-8 h-8 rounded-full bg-[var(--bg)] p-1 object-contain" onError={(e) => { e.target.style.display='none'; e.target.nextSibling.style.display='flex'; }} />
-                <div className="w-8 h-8 rounded-full bg-[var(--primary)]/20 text-[var(--primary)] hidden items-center justify-center font-bold text-sm">{fav.title.charAt(0)}</div>
+                <Favicon url={fav.url} title={fav.title} sizeClass="h-8 w-8" fallbackClassName="rounded-full bg-[var(--bg)] text-[var(--primary)]" />
                 <div>
                   <p className="font-medium text-[var(--text)]">{fav.title}</p>
                   <p className="text-xs text-[var(--text-muted)] truncate max-w-[150px]">{fav.username}</p>
@@ -2324,8 +2495,7 @@ const Dashboard = () => {
           {recentPasswords.map((item, i) => (
             <div key={item.id} className={`p-4 flex items-center justify-between cursor-pointer hover:bg-[var(--surface-hover)] transition-colors ${i !== recentPasswords.length - 1 ? 'border-b border-[var(--border)]' : ''}`} onClick={() => setQuickEdit({ type: 'password', item })}>
                <div className="flex items-center space-x-3">
-                 <img src={getFavicon(item.url)} alt="" className="w-8 h-8 rounded bg-[var(--bg)] p-0.5" onError={(e) => { e.target.style.display='none'; e.target.nextSibling.style.display='flex'; }} />
-                 <div className="w-8 h-8 rounded bg-[var(--primary)]/20 text-[var(--primary)] hidden items-center justify-center font-bold text-sm">{item.title.charAt(0)}</div>
+                 <Favicon url={item.url} title={item.title} sizeClass="h-8 w-8" fallbackClassName="rounded bg-[var(--bg)] text-[var(--primary)]" />
                  <div>
                    <p className="font-medium text-[var(--text)]">{item.title}</p>
                    <p className="text-xs text-[var(--text-muted)]">{new Date(item.date).toLocaleDateString()}</p>
@@ -2803,17 +2973,9 @@ const PasswordManager = () => {
                         onClick={() => setDetailItem(item)}
                         className="flex min-w-0 items-center gap-3 text-left sm:pr-4"
                       >
-                        <div className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden">
-                          <img
-                            src={getFavicon(item.url)}
-                            alt=""
-                            className="h-7 w-7 object-contain"
-                            onError={(e) => { e.target.style.display='none'; e.target.nextSibling.style.display='flex'; }}
-                          />
-                          <div className="hidden h-9 w-9 items-center justify-center text-sm font-black text-white/90">
-                            {item.title.charAt(0)}
+                          <div className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden">
+                            <Favicon url={item.url} title={item.title} sizeClass="h-9 w-9" fallbackClassName="rounded-lg text-white/90" />
                           </div>
-                        </div>
 
                         <div className="min-w-0 flex-1">
                           <div className="flex items-center gap-2">
@@ -2845,15 +3007,7 @@ const PasswordManager = () => {
           <div className="space-y-4">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
               <div className="flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-2xl border border-white/8 bg-black/15">
-                <img
-                  src={getFavicon(detailItem.url)}
-                  alt=""
-                  className="h-7 w-7 object-contain"
-                  onError={(e) => { e.target.style.display='none'; e.target.nextSibling.style.display='flex'; }}
-                />
-                <div className="hidden h-12 w-12 items-center justify-center text-sm font-black text-white/90">
-                  {detailItem.title.charAt(0)}
-                </div>
+                <Favicon url={detailItem.url} title={detailItem.title} sizeClass="h-12 w-12" fallbackClassName="rounded-2xl text-white/90" />
               </div>
               <div className="min-w-0">
                 <h3 className="truncate text-lg font-semibold text-[var(--text)]">{detailItem.title}</h3>
@@ -2938,8 +3092,7 @@ const PasswordManager = () => {
       <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title={editingItem ? t('edit') : t('addPassword')}>
         <form onSubmit={handleSave} className="space-y-4">
           <div className="flex items-center justify-center mb-4">
-            <img src={getFavicon(form.url)} alt="" className="w-16 h-16 rounded-2xl bg-[var(--bg)] p-2 border border-[var(--border)]" onError={(e) => { e.target.style.display='none'; e.target.nextSibling.style.display='flex'; }} />
-            <div className="w-16 h-16 rounded-2xl bg-[var(--primary)]/20 text-[var(--primary)] hidden items-center justify-center font-bold text-2xl border border-[var(--border)]">{form.title ? form.title.charAt(0) : <Globe/>}</div>
+            <Favicon url={form.url} title={form.title} sizeClass="h-16 w-16" fallbackClassName="rounded-2xl bg-[var(--bg)] border border-[var(--border)] text-[var(--primary)]" />
           </div>
 
           <div className="flex items-center justify-between mb-2">
@@ -3190,7 +3343,6 @@ const GlobalQuickCreateModals = () => {
     }
   };
 
-  const passwordPreview = passwordForm.url ? getFavicon(passwordForm.url) : null;
   const cardType = getCardType(cardForm.number || '');
 
   return (
@@ -3198,8 +3350,7 @@ const GlobalQuickCreateModals = () => {
       <Modal isOpen={quickCreate === 'password'} onClose={() => setQuickCreate(null)} title={t('addPassword')}>
         <form onSubmit={handleSavePassword} className="space-y-4">
           <div className="flex items-center justify-center mb-4">
-            <img src={passwordPreview} alt="" className="w-16 h-16 rounded-2xl bg-[var(--bg)] p-2 border border-[var(--border)]" onError={(e) => { e.target.style.display='none'; e.target.nextSibling.style.display='flex'; }} />
-            <div className="w-16 h-16 rounded-2xl bg-[var(--primary)]/20 text-[var(--primary)] hidden items-center justify-center font-bold text-2xl border border-[var(--border)]">{passwordForm.title ? passwordForm.title.charAt(0) : <Globe/>}</div>
+            <Favicon url={passwordForm.url} title={passwordForm.title} sizeClass="h-16 w-16" fallbackClassName="rounded-2xl bg-[var(--bg)] border border-[var(--border)] text-[var(--primary)]" />
           </div>
 
           <div className="flex items-center justify-end">
@@ -3333,7 +3484,6 @@ const GlobalQuickEditModals = () => {
     setQuickEdit(null);
   };
 
-  const passwordPreview = passwordForm?.url ? getFavicon(passwordForm.url) : null;
   const cardType = getCardType(cardForm?.number || '');
 
   return (
@@ -3342,8 +3492,7 @@ const GlobalQuickEditModals = () => {
         {passwordForm && (
           <form onSubmit={handleSavePassword} className="space-y-4">
             <div className="flex items-center justify-center mb-4">
-              <img src={passwordPreview} alt="" className="w-16 h-16 rounded-2xl bg-[var(--bg)] p-2 border border-[var(--border)]" onError={(e) => { e.target.style.display='none'; e.target.nextSibling.style.display='flex'; }} />
-              <div className="w-16 h-16 rounded-2xl bg-[var(--primary)]/20 text-[var(--primary)] hidden items-center justify-center font-bold text-2xl border border-[var(--border)]">{passwordForm.title ? passwordForm.title.charAt(0) : <Globe/>}</div>
+              <Favicon url={passwordForm.url} title={passwordForm.title} sizeClass="h-16 w-16" fallbackClassName="rounded-2xl bg-[var(--bg)] border border-[var(--border)] text-[var(--primary)]" />
             </div>
 
             <Input label={t('serviceName')} value={passwordForm.title} onChange={e => setPasswordForm({...passwordForm, title: e.target.value})} required />
