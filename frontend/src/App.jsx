@@ -25,6 +25,7 @@ const PASSKEY_STORAGE_KEYS = {
 };
 const ANDROID_BIOMETRIC_STORAGE_KEY = 'pv_android_biometric_vault';
 const ANDROID_BIOMETRIC_ENABLED_KEY = 'pv_android_biometric_enabled';
+const PASSWORDS_PENDING_CATEGORY_KEY = 'pv_passwords_pending_category';
 const textEncoder = new TextEncoder();
 const textDecoder = new TextDecoder();
 
@@ -2295,7 +2296,7 @@ const Dashboard = () => {
 const PasswordManager = () => {
   const { passwords, setPasswords, cards, categories, setCategories, syncVault, t, copyToClipboard, showToast, globalSearch } = useContext(AppContext);
   const [search, setSearch] = useState('');
-  const [selectedCategory, setSelectedCategory] = useState(null);
+  const [selectedCategory, setSelectedCategory] = useState(() => sessionStorage.getItem(PASSWORDS_PENDING_CATEGORY_KEY) || null);
   const [detailItem, setDetailItem] = useState(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingItem, setEditingItem] = useState(null);
@@ -2319,6 +2320,14 @@ const PasswordManager = () => {
     () => sortCategoriesForDisplay(categories).map(getCategoryName).filter(name => name),
     [categories]
   );
+
+  useEffect(() => {
+    const pendingCategory = sessionStorage.getItem(PASSWORDS_PENDING_CATEGORY_KEY);
+    if (pendingCategory) {
+      setSelectedCategory(pendingCategory);
+      sessionStorage.removeItem(PASSWORDS_PENDING_CATEGORY_KEY);
+    }
+  }, []);
 
   const selectedCategoryCount = useMemo(() => {
     if (!selectedCategory) return 0;
@@ -3482,7 +3491,7 @@ const SettingsScreen = () => {
     lang, setLang,
     timeoutMinutes, setTimeoutMinutes,
     t, showToast,
-    setIsLocked, setMasterHash, setVaultKey, setVaultKeyRaw, setVaultKeyWrapMaster, setVaultSalt, setVaultVersion,
+    setIsLocked, setMasterHash, setVaultKey, setVaultKeyRaw, setVaultKeyWrapMaster, setVaultSalt, setVaultVersion, setActiveTab,
     userId, masterHash, vaultSalt, vaultVersion, vaultKey, vaultKeyRaw, vaultKeyWrapMaster, passwords, setPasswords, cards, setCards, categories, setCategories,
     passkeyCredentials, setPasskeyCredentials, hasPasskeys, setHasPasskeys, nativeBiometricsEnabled, setNativeBiometricsEnabled, syncVault,
   } = useContext(AppContext);
@@ -3650,7 +3659,8 @@ const SettingsScreen = () => {
       const nextCategories = normalizeCategories(categories);
       setPasswords(nextPasswords);
       setCategories(nextCategories);
-      setSelectedCategory('Other');
+      sessionStorage.setItem(PASSWORDS_PENDING_CATEGORY_KEY, 'Other');
+      setActiveTab('passwords');
       setDetailItem(null);
       await persistVault(nextCategories, nextPasswords);
       showToast(`Importados ${created} registos${replaced ? `, ${replaced} substituídos` : ''}${ignored ? `, ${ignored} ignorados` : ''}.`);
