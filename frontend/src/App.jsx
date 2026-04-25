@@ -1199,6 +1199,9 @@ const AppProvider = ({ children }) => {
     }
     if (typeof storedNativeBiometrics === 'boolean') {
       setNativeBiometricsEnabled(storedNativeBiometrics);
+      if (storedNativeBiometrics) {
+        setHasPasskeys(true);
+      }
     }
   }, [userId]);
 
@@ -2246,7 +2249,7 @@ const AuthScreen = () => {
           </Button>
         </form>
 
-        {!isSetupState && hasPasskeys && (
+        {!isSetupState && (hasPasskeys || (IS_ANDROID_NATIVE && nativeBiometricsEnabled)) && (
           <div className="mt-4">
             <Button
               type="button"
