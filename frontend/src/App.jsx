@@ -25,6 +25,7 @@ const PASSKEY_STORAGE_KEYS = {
 };
 const ANDROID_BIOMETRIC_STORAGE_KEY = 'pv_android_biometric_vault';
 const ANDROID_BIOMETRIC_ENABLED_KEY = 'pv_android_biometric_enabled';
+const LAST_AUTH_IDENTIFIER_KEY = 'pv_last_auth_identifier';
 const PASSWORDS_PENDING_CATEGORY_KEY = 'pv_passwords_pending_category';
 const textEncoder = new TextEncoder();
 const textDecoder = new TextDecoder();
@@ -548,6 +549,15 @@ const normalizeStorageScope = (value = '') => {
 };
 
 const getVaultStorageScope = (userId = '', identifier = '') => normalizeStorageScope(userId || identifier || 'global');
+const getPersistedAuthIdentifier = () => sessionStorage.getItem('pv_auth_identifier') || localStorage.getItem(LAST_AUTH_IDENTIFIER_KEY) || '';
+const setPersistedAuthIdentifier = (value = '') => {
+  const normalized = String(value || '').trim();
+  if (normalized) {
+    localStorage.setItem(LAST_AUTH_IDENTIFIER_KEY, normalized);
+  } else {
+    localStorage.removeItem(LAST_AUTH_IDENTIFIER_KEY);
+  }
+};
 
 const getScopedStorageKey = (baseKey, scope = 'global') => `${baseKey}:${normalizeStorageScope(scope)}`;
 
@@ -1110,7 +1120,7 @@ const AppProvider = ({ children }) => {
   const [vaultKeyWrapMaster, setVaultKeyWrapMaster] = useState(null);
   const initialStorageScope = PREVIEW_MODE
     ? 'preview-user'
-    : getVaultStorageScope(sessionStorage.getItem('pv_user_id') || sessionStorage.getItem('pv_auth_identifier') || '');
+    : getVaultStorageScope(sessionStorage.getItem('pv_user_id') || getPersistedAuthIdentifier() || '');
   const [hasPasskeys, setHasPasskeys] = useState(PREVIEW_MODE ? false : !!readScopedStoredState(PASSKEY_STORAGE_KEYS.hasPasskeys, initialStorageScope, false));
   const [passkeyCredentials, setPasskeyCredentials] = useState(
     PREVIEW_MODE ? [] : readScopedStoredState(PASSKEY_STORAGE_KEYS.credentials, initialStorageScope, [])
@@ -1647,7 +1657,7 @@ const AuthScreen = () => {
     passkeyCredentials,
     nativeBiometricsEnabled,
   } = useContext(AppContext);
-  const [identifier, setIdentifier] = useState(sessionStorage.getItem('pv_auth_identifier') || '');
+  const [identifier, setIdentifier] = useState(getPersistedAuthIdentifier() || '');
   const [pwd, setPwd] = useState('');
   const [confirmPwd, setConfirmPwd] = useState('');
   const [error, setError] = useState('');
@@ -1662,7 +1672,7 @@ const AuthScreen = () => {
   const pendingRegistrationRef = useRef(null);
 
   useEffect(() => {
-    const storedIdentifier = sessionStorage.getItem('pv_auth_identifier') || '';
+    const storedIdentifier = getPersistedAuthIdentifier() || '';
     const storedUserId = sessionStorage.getItem('pv_user_id') || '';
     const statusUrl = storedIdentifier
       ? `${API_URL}/status?identifier=${encodeURIComponent(storedIdentifier)}`
@@ -1682,6 +1692,7 @@ const AuthScreen = () => {
         if (vaultStatus.user) {
           setIdentifier(vaultStatus.user.email || vaultStatus.user.username || '');
           sessionStorage.setItem('pv_auth_identifier', vaultStatus.user.email || vaultStatus.user.username || '');
+          setPersistedAuthIdentifier(vaultStatus.user.email || vaultStatus.user.username || '');
           setUserId(vaultStatus.user.id || null);
         }
         const nextHasPasskeys = IS_ANDROID_NATIVE
@@ -1806,6 +1817,7 @@ const AuthScreen = () => {
       };
       setIdentifier(normalizedIdentifier);
       sessionStorage.setItem('pv_auth_identifier', normalizedIdentifier);
+      setPersistedAuthIdentifier(normalizedIdentifier);
       setVerificationMessage(`Enviámos um código para ${normalizedIdentifier}.`);
       setIsVerificationPending(true);
       setError('');
@@ -1865,6 +1877,7 @@ const AuthScreen = () => {
       setUserId(verifiedUserId);
       setIdentifier(pending.identifier);
       sessionStorage.setItem('pv_auth_identifier', pending.identifier);
+      setPersistedAuthIdentifier(pending.identifier);
       if (verifiedUserId) {
         sessionStorage.setItem('pv_user_id', verifiedUserId);
       }
@@ -1922,6 +1935,7 @@ const AuthScreen = () => {
             const resolvedIdentifier = vaultStatus.user.email || vaultStatus.user.username || normalizedIdentifier;
             setIdentifier(resolvedIdentifier);
             sessionStorage.setItem('pv_auth_identifier', resolvedIdentifier);
+            setPersistedAuthIdentifier(resolvedIdentifier);
           }
           if (vaultStatus.vaultVersion) {
             setVaultVersion(vaultStatus.vaultVersion);
@@ -1960,6 +1974,7 @@ const AuthScreen = () => {
       }
       setIdentifier(normalizedIdentifier);
       sessionStorage.setItem('pv_auth_identifier', normalizedIdentifier);
+      setPersistedAuthIdentifier(normalizedIdentifier);
       const nextPasskeys = data.webauthnCredentials || [];
       const isModernVault = Number(data.vaultVersion || 1) >= 2 && !!data.vaultKeyWrapMaster;
 
@@ -2041,6 +2056,7 @@ const AuthScreen = () => {
         if (stored.identifier) {
           setIdentifier(stored.identifier);
           sessionStorage.setItem('pv_auth_identifier', stored.identifier);
+          setPersistedAuthIdentifier(stored.identifier);
         }
         await loadVaultData(stored.masterHash, vaultKeyMaterial.key, stored.vaultKeyRaw, stored.userId ? { id: stored.userId } : null);
         setNativeBiometricsEnabled(true);
@@ -3596,7 +3612,7 @@ const SettingsScreen = () => {
   const [bitwardenImportBusy, setBitwardenImportBusy] = useState(false);
   const [bitwardenImportError, setBitwardenImportError] = useState('');
   const [bitwardenDuplicateMode, setBitwardenDuplicateMode] = useState('ignore');
-  const identifier = sessionStorage.getItem('pv_auth_identifier') || '';
+  const identifier = getPersistedAuthIdentifier() || '';
   const currentVaultKeyWrapMaster = vaultKeyWrapMaster || null;
 
   const bitwardenImportSummary = useMemo(() => {
