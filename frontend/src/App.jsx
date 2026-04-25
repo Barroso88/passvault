@@ -7,7 +7,7 @@ import {
   Lock, Unlock, Shield, Key, CreditCard, LayoutDashboard, Settings, Plus, 
   Search, Eye, EyeOff, Copy, Trash, Edit, Check, Star, AlertTriangle, 
   LogOut, Clock, Globe, Menu, X, ChevronRight, ChevronDown, Hash, RefreshCw, Palette, Sparkles, Loader2,
-  Folder, FolderPlus, ArrowLeft
+  Folder, FolderPlus, ArrowLeft, Upload, FileText, ArrowLeftRight
 } from 'lucide-react';
 
 // ==========================================
@@ -139,6 +139,23 @@ const TRANSLATIONS = {
     backupPasswordPlaceholder: 'Usa uma password forte',
     exportBackup: 'Exportar backup encriptado',
     restoreBackup: 'Restaurar backup',
+    bitwardenImportSection: 'Importar do Bitwarden',
+    bitwardenImportDescription: 'Importa ficheiros CSV do Bitwarden para a categoria Other. Podes rever duplicados antes de gravar.',
+    bitwardenImportSelect: 'Selecionar CSV do Bitwarden',
+    bitwardenImportSelected: 'CSV selecionado',
+    bitwardenImportHint: 'Os itens importados entram em Other. Os duplicados podem ser ignorados ou substituídos antes de gravar.',
+    bitwardenImportReview: 'Revisão da importação',
+    bitwardenImportSummary: 'Resumo da importação',
+    bitwardenImportFile: 'Ficheiro',
+    bitwardenImportTotal: 'Total',
+    bitwardenImportNew: 'Novos',
+    bitwardenImportDuplicates: 'Duplicados',
+    bitwardenImportIgnored: 'Ignorados',
+    bitwardenImportReplace: 'Substituir',
+    bitwardenImportIgnore: 'Ignorar',
+    bitwardenImportToOther: 'Importar para Other',
+    bitwardenImportClear: 'Limpar importação',
+    bitwardenImportNoFile: 'Seleciona um CSV exportado do Bitwarden para continuar.',
   },
   en: {
     welcome: 'Welcome to PassVault',
@@ -233,6 +250,23 @@ const TRANSLATIONS = {
     backupPasswordPlaceholder: 'Use a strong password',
     exportBackup: 'Export encrypted backup',
     restoreBackup: 'Restore backup',
+    bitwardenImportSection: 'Import from Bitwarden',
+    bitwardenImportDescription: 'Import Bitwarden CSV files into the Other category. You can review duplicates before saving.',
+    bitwardenImportSelect: 'Select Bitwarden CSV',
+    bitwardenImportSelected: 'CSV selected',
+    bitwardenImportHint: 'Imported items go into Other. Duplicates can be ignored or replaced before saving.',
+    bitwardenImportReview: 'Import review',
+    bitwardenImportSummary: 'Import summary',
+    bitwardenImportFile: 'File',
+    bitwardenImportTotal: 'Total',
+    bitwardenImportNew: 'New',
+    bitwardenImportDuplicates: 'Duplicates',
+    bitwardenImportIgnored: 'Ignored',
+    bitwardenImportReplace: 'Replace',
+    bitwardenImportIgnore: 'Ignore',
+    bitwardenImportToOther: 'Import to Other',
+    bitwardenImportClear: 'Clear import',
+    bitwardenImportNoFile: 'Select a Bitwarden CSV export to continue.',
   },
   es: {
     welcome: 'Bienvenido a PassVault',
@@ -327,6 +361,23 @@ const TRANSLATIONS = {
     backupPasswordPlaceholder: 'Usa una contraseña fuerte',
     exportBackup: 'Exportar copia encriptada',
     restoreBackup: 'Restaurar copia',
+    bitwardenImportSection: 'Importar desde Bitwarden',
+    bitwardenImportDescription: 'Importa archivos CSV de Bitwarden a la categoría Other. Puedes revisar duplicados antes de guardar.',
+    bitwardenImportSelect: 'Seleccionar CSV de Bitwarden',
+    bitwardenImportSelected: 'CSV seleccionado',
+    bitwardenImportHint: 'Los elementos importados entran en Other. Los duplicados pueden ignorarse o sustituirse antes de guardar.',
+    bitwardenImportReview: 'Revisión de importación',
+    bitwardenImportSummary: 'Resumen de importación',
+    bitwardenImportFile: 'Archivo',
+    bitwardenImportTotal: 'Total',
+    bitwardenImportNew: 'Nuevos',
+    bitwardenImportDuplicates: 'Duplicados',
+    bitwardenImportIgnored: 'Ignorados',
+    bitwardenImportReplace: 'Sustituir',
+    bitwardenImportIgnore: 'Ignorar',
+    bitwardenImportToOther: 'Importar a Other',
+    bitwardenImportClear: 'Limpiar importación',
+    bitwardenImportNoFile: 'Selecciona un CSV exportado de Bitwarden para continuar.',
   }
 };
 
@@ -849,6 +900,143 @@ const parseLegacyBackupPayload = (backup) => {
     categories: Array.isArray(backup.categories) ? backup.categories : DEFAULT_CATEGORIES,
     passwords: Array.isArray(backup.passwords) ? backup.passwords : [],
     cards: Array.isArray(backup.cards) ? backup.cards : [],
+  };
+};
+
+const parseCsvText = (text = '') => {
+  const rows = [];
+  let currentRow = [];
+  let currentCell = '';
+  let inQuotes = false;
+
+  for (let i = 0; i < text.length; i += 1) {
+    const char = text[i];
+    const next = text[i + 1];
+
+    if (inQuotes) {
+      if (char === '"') {
+        if (next === '"') {
+          currentCell += '"';
+          i += 1;
+        } else {
+          inQuotes = false;
+        }
+      } else {
+        currentCell += char;
+      }
+      continue;
+    }
+
+    if (char === '"') {
+      inQuotes = true;
+      continue;
+    }
+
+    if (char === ',') {
+      currentRow.push(currentCell);
+      currentCell = '';
+      continue;
+    }
+
+    if (char === '\n') {
+      currentRow.push(currentCell);
+      if (currentRow.some((entry) => String(entry || '').trim() !== '')) {
+        rows.push(currentRow);
+      }
+      currentRow = [];
+      currentCell = '';
+      continue;
+    }
+
+    if (char === '\r') {
+      continue;
+    }
+
+    currentCell += char;
+  }
+
+  currentRow.push(currentCell);
+  if (currentRow.some((entry) => String(entry || '').trim() !== '')) {
+    rows.push(currentRow);
+  }
+
+  return rows;
+};
+
+const parseBitwardenCsv = (text = '') => {
+  const rows = parseCsvText(text);
+  if (!rows.length) return [];
+
+  const headers = rows.shift().map((header) => normalizeText(header).replace(/\s+/g, '_'));
+  return rows
+    .map((cells) => {
+      const record = {};
+      headers.forEach((header, index) => {
+        record[header] = cells[index] ?? '';
+      });
+      return record;
+    })
+    .filter((record) => Object.values(record).some((value) => String(value || '').trim() !== ''));
+};
+
+const normalizePasswordImportKey = (item = {}) => {
+  const title = normalizeText(item.title || '');
+  const username = normalizeText(item.username || '');
+  const host = normalizeText(getHostname(item.url || ''));
+  const rawUrl = normalizeText(item.url || '');
+  return [
+    [title, username, host].join('|'),
+    [title, username, rawUrl].join('|'),
+    [title, '', host].join('|'),
+    ['', username, host].join('|'),
+  ].filter((value, index, array) => value && array.indexOf(value) === index);
+};
+
+const findPasswordImportMatch = (item = {}, existing = []) => {
+  const lookup = new Map();
+  (Array.isArray(existing) ? existing : []).forEach((password) => {
+    normalizePasswordImportKey(password).forEach((key) => {
+      if (!lookup.has(key)) {
+        lookup.set(key, password);
+      }
+    });
+  });
+
+  for (const key of normalizePasswordImportKey(item)) {
+    if (lookup.has(key)) {
+      return lookup.get(key);
+    }
+  }
+
+  return null;
+};
+
+const mapBitwardenRecordToPassword = (record = {}) => {
+  const type = normalizeText(record.type || '');
+  const url = String(record.login_uri || record.url || '').trim();
+  const username = String(record.login_username || record.username || '').trim();
+  const password = String(record.login_password || record.password || '').trim();
+  const notes = String(record.notes || record.note || '').trim();
+  const title = String(record.name || record.title || '').trim() || getHostname(url) || username || 'Bitwarden';
+  const favorite = ['1', 'true', 'yes', 'sim'].includes(normalizeText(record.favorite || ''));
+  const hasLoginData = title || url || username || password || notes;
+
+  if (type && type !== 'login' && type !== '1') {
+    return null;
+  }
+
+  if (!hasLoginData) {
+    return null;
+  }
+
+  return {
+    title,
+    url,
+    username,
+    password,
+    notes,
+    category: 'Other',
+    favorite,
   };
 };
 
@@ -3310,8 +3498,169 @@ const SettingsScreen = () => {
   const [isBackupBusy, setIsBackupBusy] = useState(false);
   const [backupError, setBackupError] = useState('');
   const backupInputRef = useRef(null);
+  const bitwardenInputRef = useRef(null);
+  const [bitwardenImportRows, setBitwardenImportRows] = useState([]);
+  const [bitwardenImportFileName, setBitwardenImportFileName] = useState('');
+  const [bitwardenImportBusy, setBitwardenImportBusy] = useState(false);
+  const [bitwardenImportError, setBitwardenImportError] = useState('');
+  const [bitwardenDuplicateMode, setBitwardenDuplicateMode] = useState('ignore');
   const identifier = sessionStorage.getItem('pv_auth_identifier') || '';
   const currentVaultKeyWrapMaster = vaultKeyWrapMaster || null;
+
+  const bitwardenImportSummary = useMemo(() => {
+    const total = bitwardenImportRows.length;
+    const duplicates = bitwardenImportRows.filter((row) => row.duplicateId).length;
+    const newItems = bitwardenImportRows.filter((row) => !row.duplicateId).length;
+    const ignored = bitwardenImportRows.filter((row) => row.duplicateId && row.action === 'ignore').length;
+    const importable = bitwardenImportRows.filter((row) => !row.duplicateId || row.action === 'replace').length;
+    return {
+      total,
+      duplicates,
+      newItems,
+      ignored,
+      importable,
+    };
+  }, [bitwardenImportRows]);
+
+  const resetBitwardenImport = () => {
+    setBitwardenImportRows([]);
+    setBitwardenImportFileName('');
+    setBitwardenImportError('');
+    setBitwardenDuplicateMode('ignore');
+    if (bitwardenInputRef.current) {
+      bitwardenInputRef.current.value = '';
+    }
+  };
+
+  const handleBitwardenImportFile = async (file) => {
+    if (!file) return;
+
+    setBitwardenImportBusy(true);
+    setBitwardenImportError('');
+
+    try {
+      const raw = await file.text();
+      const records = parseBitwardenCsv(raw);
+      if (!records.length) {
+        throw new Error('O CSV não contém registos importáveis.');
+      }
+
+      const previewRows = [];
+      records.forEach((record, index) => {
+        const mapped = mapBitwardenRecordToPassword(record);
+        if (!mapped) return;
+
+        const duplicateMatch = findPasswordImportMatch(mapped, passwords);
+        previewRows.push({
+          ...mapped,
+          id: `bw-${Date.now()}-${index}-${Math.random().toString(16).slice(2)}`,
+          date: Date.now(),
+          duplicateId: duplicateMatch?.id || null,
+          duplicateLabel: duplicateMatch?.title || duplicateMatch?.username || duplicateMatch?.url || '',
+          action: duplicateMatch ? bitwardenDuplicateMode : 'import',
+        });
+      });
+
+      if (!previewRows.length) {
+        throw new Error('Não encontrei acessos do Bitwarden para importar.');
+      }
+
+      setBitwardenImportRows(previewRows);
+      setBitwardenImportFileName(file.name || 'bitwarden.csv');
+      setBitwardenImportError('');
+      showToast('Importação Bitwarden preparada.');
+    } catch (err) {
+      setBitwardenImportRows([]);
+      setBitwardenImportFileName('');
+      setBitwardenImportError(err.message || 'Não foi possível ler o CSV do Bitwarden.');
+    } finally {
+      setBitwardenImportBusy(false);
+      if (bitwardenInputRef.current) {
+        bitwardenInputRef.current.value = '';
+      }
+    }
+  };
+
+  const updateBitwardenImportMode = (mode) => {
+    setBitwardenDuplicateMode(mode);
+    setBitwardenImportRows((rows) => rows.map((row) => (row.duplicateId ? { ...row, action: mode } : row)));
+  };
+
+  const updateBitwardenImportRowAction = (rowId, action) => {
+    setBitwardenImportRows((rows) => rows.map((row) => (row.id === rowId ? { ...row, action } : row)));
+  };
+
+  const handleConfirmBitwardenImport = async () => {
+    if (!bitwardenImportRows.length) {
+      setBitwardenImportError('Seleciona primeiro um CSV do Bitwarden.');
+      return;
+    }
+
+    setBitwardenImportBusy(true);
+    setBitwardenImportError('');
+
+    try {
+      const nextPasswords = [...passwords];
+      let created = 0;
+      let replaced = 0;
+      let ignored = 0;
+
+      bitwardenImportRows.forEach((row) => {
+        if (row.duplicateId) {
+          if (row.action === 'ignore') {
+            ignored += 1;
+            return;
+          }
+
+          const duplicateIndex = nextPasswords.findIndex((item) => item.id === row.duplicateId);
+          if (duplicateIndex === -1) {
+            created += 1;
+            nextPasswords.push({
+              ...row,
+              id: `bw-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+              category: 'Other',
+              date: Date.now(),
+            });
+            return;
+          }
+
+          nextPasswords[duplicateIndex] = {
+            ...nextPasswords[duplicateIndex],
+            title: row.title,
+            url: row.url,
+            username: row.username,
+            password: row.password,
+            notes: row.notes,
+            favorite: row.favorite,
+            date: Date.now(),
+          };
+          replaced += 1;
+          return;
+        }
+
+        nextPasswords.push({
+          ...row,
+          id: `bw-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+          category: 'Other',
+          date: Date.now(),
+        });
+        created += 1;
+      });
+
+      const nextCategories = normalizeCategories(categories);
+      setPasswords(nextPasswords);
+      setCategories(nextCategories);
+      setSelectedCategory('Other');
+      setDetailItem(null);
+      await persistVault(nextCategories, nextPasswords);
+      showToast(`Importados ${created} registos${replaced ? `, ${replaced} substituídos` : ''}${ignored ? `, ${ignored} ignorados` : ''}.`);
+      resetBitwardenImport();
+    } catch (err) {
+      setBitwardenImportError(err.message || 'Não foi possível importar o CSV do Bitwarden.');
+    } finally {
+      setBitwardenImportBusy(false);
+    }
+  };
 
   const closeMasterModal = () => {
     setIsMasterModalOpen(false);
@@ -3850,6 +4199,152 @@ const SettingsScreen = () => {
             className="hidden"
             onChange={(e) => handleRestoreBackupFile(e.target.files?.[0])}
           />
+        </div>
+      </div>
+
+      <div className="pt-4 border-t border-[var(--border)]">
+        <h2 className="text-lg font-semibold text-[var(--text)] flex items-center">
+          <Upload size={20} className="mr-2 text-[var(--primary)]" />
+          {t('bitwardenImportSection')}
+        </h2>
+        <p className="mt-2 text-sm text-[var(--text-muted)]">
+          {t('bitwardenImportDescription')}
+        </p>
+        <p className="mt-2 text-xs text-[var(--text-muted)]">
+          {t('bitwardenImportHint')}
+        </p>
+        {bitwardenImportError && (
+          <p className="mt-3 text-[var(--danger)] text-sm flex items-center">
+            <AlertTriangle size={14} className="mr-1" />
+            {bitwardenImportError}
+          </p>
+        )}
+        <div className="mt-4 space-y-3">
+          <Button
+            variant="secondary"
+            icon={Upload}
+            className="w-full py-3"
+            onClick={() => bitwardenInputRef.current?.click()}
+            disabled={bitwardenImportBusy}
+          >
+            {bitwardenImportBusy ? t('generating') : t('bitwardenImportSelect')}
+          </Button>
+          <input
+            ref={bitwardenInputRef}
+            type="file"
+            accept=".csv,text/csv"
+            className="hidden"
+            onChange={(e) => handleBitwardenImportFile(e.target.files?.[0])}
+          />
+
+          {bitwardenImportRows.length > 0 ? (
+            <div className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-4 shadow-sm">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                <div>
+                  <p className="text-sm font-semibold text-[var(--text)]">{t('bitwardenImportReview')}</p>
+                  <p className="text-xs text-[var(--text-muted)]">{bitwardenImportFileName}</p>
+                </div>
+                <div className="flex items-center gap-2 rounded-full border border-[var(--border)] bg-[var(--bg)]/70 px-3 py-2 text-xs text-[var(--text-muted)]">
+                  <ArrowLeftRight size={12} className="text-[var(--primary)]" />
+                  <span>{t('bitwardenImportDuplicates')}</span>
+                  <select
+                    value={bitwardenDuplicateMode}
+                    onChange={(e) => updateBitwardenImportMode(e.target.value)}
+                    className="bg-transparent text-[var(--text)] outline-none"
+                  >
+                    <option value="ignore">{t('bitwardenImportIgnore')}</option>
+                    <option value="replace">{t('bitwardenImportReplace')}</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-4">
+                <div className="rounded-xl border border-[var(--border)] bg-[var(--bg)]/60 px-3 py-2">
+                  <p className="text-[10px] uppercase tracking-[0.18em] text-[var(--text-muted)]">{t('bitwardenImportTotal')}</p>
+                  <p className="mt-1 text-lg font-semibold text-[var(--text)]">{bitwardenImportSummary.total}</p>
+                </div>
+                <div className="rounded-xl border border-[var(--border)] bg-[var(--bg)]/60 px-3 py-2">
+                  <p className="text-[10px] uppercase tracking-[0.18em] text-[var(--text-muted)]">{t('bitwardenImportNew')}</p>
+                  <p className="mt-1 text-lg font-semibold text-[var(--text)]">{bitwardenImportSummary.newItems}</p>
+                </div>
+                <div className="rounded-xl border border-[var(--border)] bg-[var(--bg)]/60 px-3 py-2">
+                  <p className="text-[10px] uppercase tracking-[0.18em] text-[var(--text-muted)]">{t('bitwardenImportDuplicates')}</p>
+                  <p className="mt-1 text-lg font-semibold text-[var(--text)]">{bitwardenImportSummary.duplicates}</p>
+                </div>
+                <div className="rounded-xl border border-[var(--border)] bg-[var(--bg)]/60 px-3 py-2">
+                  <p className="text-[10px] uppercase tracking-[0.18em] text-[var(--text-muted)]">{t('bitwardenImportIgnored')}</p>
+                  <p className="mt-1 text-lg font-semibold text-[var(--text)]">{bitwardenImportSummary.ignored}</p>
+                </div>
+              </div>
+
+              <div className="mt-4 max-h-[24rem] space-y-2 overflow-y-auto pr-1">
+                {bitwardenImportRows.map((row) => (
+                  <div key={row.id} className="rounded-xl border border-[var(--border)] bg-[var(--bg)]/60 px-3 py-3">
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                      <div className="min-w-0 flex-1">
+                        <div className="flex min-w-0 items-center gap-2">
+                          <FileText size={14} className="shrink-0 text-[var(--primary)]" />
+                          <p className="truncate text-sm font-semibold text-[var(--text)]">{row.title || 'Sem nome'}</p>
+                          <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.16em] ${row.duplicateId ? 'border border-amber-500/30 bg-amber-500/10 text-amber-200/90' : 'border border-emerald-500/30 bg-emerald-500/10 text-emerald-200/90'}`}>
+                            {row.duplicateId ? t('bitwardenImportDuplicates') : t('bitwardenImportNew')}
+                          </span>
+                        </div>
+                        <p className="mt-1 truncate text-xs text-[var(--text-muted)]">
+                          {row.username || '—'}
+                          {row.url ? ` • ${row.url}` : ''}
+                        </p>
+                      </div>
+
+                      <div className="flex items-center gap-2 sm:justify-end">
+                        <span className="rounded-full border border-white/10 bg-black/15 px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-white/70">
+                          Other
+                        </span>
+                        {row.duplicateId ? (
+                          <select
+                            value={row.action}
+                            onChange={(e) => updateBitwardenImportRowAction(row.id, e.target.value)}
+                            className="rounded-full border border-[var(--border)] bg-[var(--surface)] px-3 py-1.5 text-xs text-[var(--text)] outline-none"
+                          >
+                            <option value="ignore">{t('bitwardenImportIgnore')}</option>
+                            <option value="replace">{t('bitwardenImportReplace')}</option>
+                          </select>
+                        ) : (
+                          <span className="rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-emerald-200/90">
+                            {t('bitwardenImportNew')}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              <div className="mt-4 flex flex-col gap-3 sm:flex-row">
+                <Button
+                  variant="primary"
+                  icon={Check}
+                  className="w-full py-3"
+                  onClick={handleConfirmBitwardenImport}
+                  disabled={bitwardenImportBusy}
+                >
+                  {bitwardenImportBusy ? t('generating') : t('bitwardenImportToOther')}
+                </Button>
+                <Button
+                  variant="secondary"
+                  icon={Trash}
+                  className="w-full py-3"
+                  onClick={resetBitwardenImport}
+                  disabled={bitwardenImportBusy}
+                >
+                  {t('bitwardenImportClear')}
+                </Button>
+              </div>
+            </div>
+          ) : (
+            <div className="rounded-2xl border border-dashed border-[var(--border)] bg-[var(--bg)]/50 px-4 py-4 text-sm text-[var(--text-muted)]">
+              {t('bitwardenImportNoFile')}
+            </div>
+          )}
         </div>
       </div>
 
