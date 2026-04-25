@@ -477,6 +477,11 @@ function dedupeOrdered(values = []) {
     return [...new Set((Array.isArray(values) ? values : []).filter(Boolean))];
 }
 
+const faviconFetchHeaders = {
+    'User-Agent': 'Mozilla/5.0 (PassVault favicon resolver)',
+    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
+};
+
 function scoreIconHref(href = '') {
     const value = String(href || '').toLowerCase();
     if (value.includes('maskable')) return 3000;
@@ -513,7 +518,7 @@ function parseIconLinksFromHtml(html = '', baseUrl = '') {
 
 async function readManifestIcons(manifestUrl) {
     try {
-        const res = await fetch(manifestUrl, { cache: 'force-cache' });
+        const res = await fetch(manifestUrl, { cache: 'force-cache', headers: faviconFetchHeaders });
         if (!res.ok) return [];
         const manifest = await res.json().catch(() => null);
         const icons = Array.isArray(manifest?.icons) ? manifest.icons : [];
@@ -555,7 +560,7 @@ async function resolveFaviconCandidates(url = '') {
     ];
 
     try {
-        const res = await fetch(parsed.toString(), { cache: 'force-cache' });
+        const res = await fetch(parsed.toString(), { cache: 'force-cache', headers: faviconFetchHeaders });
         if (res.ok) {
             const html = await res.text();
             const discovered = parseIconLinksFromHtml(html, parsed.toString());

@@ -1530,7 +1530,7 @@ const getFaviconLabel = (title, url) => {
   return source ? source.charAt(0).toUpperCase() : '';
 };
 
-const Favicon = ({ url, title, sizeClass = 'h-8 w-8', imageClassName = 'h-full w-full object-contain', fallbackClassName = 'flex h-full w-full items-center justify-center text-sm font-bold text-[var(--primary)]/90', fallbackIcon: FallbackIcon = Globe }) => {
+const Favicon = ({ url, title, sizeClass = 'h-8 w-8', imageClassName = 'block max-h-full max-w-full object-contain', fallbackClassName = 'flex h-full w-full items-center justify-center text-sm font-bold text-[var(--primary)]/90', fallbackIcon: FallbackIcon = Globe }) => {
   const [candidates, setCandidates] = useState([]);
   const [candidateIndex, setCandidateIndex] = useState(0);
   const [failed, setFailed] = useState(false);
@@ -1590,6 +1590,7 @@ const Favicon = ({ url, title, sizeClass = 'h-8 w-8', imageClassName = 'h-full w
       src={activeSrc}
       alt=""
       className={`${sizeClass} ${imageClassName} shrink-0 overflow-hidden rounded-lg`}
+      style={{ width: '100%', height: '100%' }}
       loading="lazy"
       decoding="async"
       onError={() => {
