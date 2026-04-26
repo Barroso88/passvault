@@ -17,6 +17,9 @@ app.use(cors());
 app.use(express.json({ limit: '10mb' }));
 app.use(express.static(path.join(__dirname, '../frontend/dist')));
 
+let dbReady = false;
+let dbInitTimer = null;
+
 const pool = new Pool({
     connectionString: process.env.DATABASE_URL
 });
@@ -299,6 +302,40 @@ async function ensureSchema() {
         );
     }
 }
+
+function scheduleDatabaseInitRetry() {
+    if (dbInitTimer) {
+        clearTimeout(dbInitTimer);
+    }
+    dbInitTimer = setTimeout(() => {
+        initializeDatabase().catch((err) => {
+            console.error('Falha ao reintentar a inicialização da base de dados:', err);
+        });
+    }, 10000);
+}
+
+async function initializeDatabase() {
+    try {
+        await ensureSchema();
+        dbReady = true;
+        console.log('🟢 Base de dados pronta.');
+        if (dbInitTimer) {
+            clearTimeout(dbInitTimer);
+            dbInitTimer = null;
+        }
+    } catch (err) {
+        dbReady = false;
+        console.error('Falha ao inicializar o esquema da base de dados:', err);
+        scheduleDatabaseInitRetry();
+    }
+}
+
+app.use('/api', (req, res, next) => {
+    if (!dbReady) {
+        return res.status(503).json({ error: 'Base de dados indisponível. Tenta novamente em instantes.' });
+    }
+    next();
+});
 
 async function callGemini(prompt, schema) {
     if (!GEMINI_API_KEY) {
@@ -1219,11 +1256,7 @@ app.post('/api/ai/generate', async (req, res) => {
 });
 
 const PORT = process.env.PORT || 3001;
-ensureSchema()
-    .then(() => {
-        app.listen(PORT, () => console.log(`🚀 PassVault API a correr na porta ${PORT}`));
-    })
-    .catch((err) => {
-        console.error('Falha ao inicializar o esquema da base de dados:', err);
-        process.exit(1);
-    });
+app.listen(PORT, () => console.log(`🚀 PassVault API a correr na porta ${PORT}`));
+initializeDatabase().catch((err) => {
+    console.error('Falha inesperada ao inicializar a base de dados:', err);
+});
