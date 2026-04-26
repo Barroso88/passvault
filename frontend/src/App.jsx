@@ -2345,15 +2345,6 @@ const Dashboard = () => {
         </div>
       </div>
 
-      {/* Quick Actions */}
-      <div>
-        <h2 className="text-sm font-semibold text-[var(--text-muted)] uppercase tracking-wider mb-3">{t('quickActions')}</h2>
-        <div className="grid grid-cols-2 gap-3">
-          <Button variant="secondary" onClick={() => setQuickCreate('password')} icon={Plus} className="text-sm">{t('addPassword')}</Button>
-          <Button variant="secondary" onClick={() => setQuickCreate('card')} icon={Plus} className="text-sm">{t('addCard')}</Button>
-        </div>
-      </div>
-
       {/* Favorites */}
       {favorites.length > 0 && (
         <div>
@@ -2372,6 +2363,15 @@ const Dashboard = () => {
           </div>
         </div>
       )}
+
+      {/* Quick Actions */}
+      <div>
+        <h2 className="text-sm font-semibold text-[var(--text-muted)] uppercase tracking-wider mb-3">{t('quickActions')}</h2>
+        <div className="grid grid-cols-2 gap-3">
+          <Button variant="secondary" onClick={() => setQuickCreate('password')} icon={Plus} className="text-sm">{t('addPassword')}</Button>
+          <Button variant="secondary" onClick={() => setQuickCreate('card')} icon={Plus} className="text-sm">{t('addCard')}</Button>
+        </div>
+      </div>
 
     </div>
   );
