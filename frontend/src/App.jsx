@@ -1182,7 +1182,6 @@ const AppProvider = ({ children }) => {
   const [quickEdit, setQuickEdit] = useState(null);
   const [toast, setToast] = useState(null);
   const screenBackHandlerRef = useRef(null);
-  const vaultRefreshHandlerRef = useRef(null);
 
   // Guardar apenas configs no localstorage
   useEffect(() => { localStorage.setItem('pv_theme', theme); }, [theme]);
@@ -1363,26 +1362,6 @@ const AppProvider = ({ children }) => {
     }
   }, []);
 
-  const registerVaultRefreshHandler = useCallback((handler) => {
-    vaultRefreshHandlerRef.current = handler;
-    return () => {
-      if (vaultRefreshHandlerRef.current === handler) {
-        vaultRefreshHandlerRef.current = null;
-      }
-    };
-  }, []);
-
-  const triggerVaultRefreshHandler = useCallback(() => {
-    if (typeof vaultRefreshHandlerRef.current !== 'function') return false;
-    try {
-      const result = vaultRefreshHandlerRef.current();
-      return result;
-    } catch (error) {
-      console.error('Falha no handler de refresh do cofre:', error);
-      return false;
-    }
-  }, []);
-
   const contextValue = {
     theme, setTheme, lang, setLang, timeoutMinutes, setTimeoutMinutes,
     isLocked, setIsLocked, userId, setUserId, masterHash, setMasterHash, vaultSalt, setVaultSalt, vaultVersion, setVaultVersion, vaultKey, setVaultKey, vaultKeyRaw, setVaultKeyRaw, vaultKeyWrapMaster, setVaultKeyWrapMaster, hasPasskeys, setHasPasskeys, passkeyCredentials, setPasskeyCredentials,
@@ -1395,8 +1374,6 @@ const AppProvider = ({ children }) => {
     nativeBiometricsEnabled, setNativeBiometricsEnabled,
     registerScreenBackHandler,
     triggerScreenBackHandler,
-    registerVaultRefreshHandler,
-    triggerVaultRefreshHandler,
     syncVault,
     t, showToast, copyToClipboard
   };
@@ -1740,7 +1717,6 @@ const AuthScreen = () => {
     hasPasskeys,
     passkeyCredentials,
     nativeBiometricsEnabled,
-    registerVaultRefreshHandler,
   } = useContext(AppContext);
   const [identifier, setIdentifier] = useState(() => {
     const storedIdentifier = getPersistedAuthIdentifier();
@@ -1860,24 +1836,6 @@ const AuthScreen = () => {
     setError('');
     setIsLocked(false);
   };
-
-  useEffect(() => {
-    if (PREVIEW_MODE) return undefined;
-    if (!masterHash || !vaultKey || isLocked) return undefined;
-
-    const unregister = registerVaultRefreshHandler(async () => {
-      try {
-        if (!identifier.trim()) return false;
-        await loadVaultData(masterHash, vaultKey, vaultKeyRaw, userId ? { id: userId } : null);
-        return true;
-      } catch (error) {
-        console.error('Falha ao refrescar o cofre após focus/resume:', error);
-        return false;
-      }
-    });
-
-    return unregister;
-  }, [PREVIEW_MODE, identifier, isLocked, loadVaultData, masterHash, registerVaultRefreshHandler, userId, vaultKey, vaultKeyRaw]);
 
   const resetPendingRegistration = () => {
     pendingRegistrationRef.current = null;
@@ -4692,7 +4650,6 @@ const MainLayout = () => {
     quickEdit,
     setQuickEdit,
     triggerScreenBackHandler,
-    triggerVaultRefreshHandler,
   } = useContext(AppContext);
   const globalTerms = useMemo(() => splitSearchTerms(globalSearch), [globalSearch]);
 
@@ -4709,47 +4666,6 @@ const MainLayout = () => {
       setActiveTab(nextTab);
     }
   }, [activeTab, cards, categories, globalTerms, passwords, setActiveTab]);
-
-  useEffect(() => {
-    if (PREVIEW_MODE) return undefined;
-
-    let isActive = true;
-    let resumeHandle = null;
-
-    const handleRefresh = () => {
-      if (!isActive) return;
-      triggerVaultRefreshHandler();
-    };
-    const handleVisibilityChange = () => {
-      if (document.visibilityState === 'visible') {
-        handleRefresh();
-      }
-    };
-
-    const registerResumeListener = async () => {
-      if (!IS_ANDROID_NATIVE) return;
-      resumeHandle = await CapacitorApp.addListener('resume', handleRefresh);
-      if (!isActive && resumeHandle) {
-        await resumeHandle.remove();
-      }
-    };
-
-    window.addEventListener('focus', handleRefresh);
-    window.addEventListener('visibilitychange', handleVisibilityChange);
-
-    registerResumeListener().catch((error) => {
-      console.error('Falha ao registar resume listener Android:', error);
-    });
-
-    return () => {
-      isActive = false;
-      window.removeEventListener('focus', handleRefresh);
-      window.removeEventListener('visibilitychange', handleVisibilityChange);
-      if (resumeHandle) {
-        resumeHandle.remove();
-      }
-    };
-  }, [triggerVaultRefreshHandler]);
 
   const navItems = [
     { id: 'dashboard', icon: LayoutDashboard, label: t('dashboard') },
