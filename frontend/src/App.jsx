@@ -70,7 +70,6 @@ const TRANSLATIONS = {
     search: 'Pesquisar...',
     totalPasswords: 'Total de Passwords',
     totalCards: 'Total de Cartões',
-    recent: 'Adicionados Recentemente',
     favorites: 'Favoritos',
     quickActions: 'Ações Rápidas',
     addPassword: 'Nova Password',
@@ -186,7 +185,6 @@ const TRANSLATIONS = {
     search: 'Search...',
     totalPasswords: 'Total Passwords',
     totalCards: 'Total Cards',
-    recent: 'Recently Added',
     favorites: 'Favorites',
     quickActions: 'Quick Actions',
     addPassword: 'New Password',
@@ -302,7 +300,6 @@ const TRANSLATIONS = {
     search: 'Buscar...',
     totalPasswords: 'Total Contraseñas',
     totalCards: 'Total Tarjetas',
-    recent: 'Añadidos Recientemente',
     favorites: 'Favoritos',
     quickActions: 'Acciones Rápidas',
     addPassword: 'Nueva Contraseña',
@@ -2318,12 +2315,6 @@ const Dashboard = () => {
   const { passwords, cards, setQuickEdit, setQuickCreate, t, globalSearch } = useContext(AppContext);
   const globalTerms = useMemo(() => splitSearchTerms(globalSearch), [globalSearch]);
   
-  const recentPasswords = useMemo(() => (
-    [...passwords]
-      .filter((item) => matchesSearchTerms(passwordSearchFields(item), globalTerms))
-      .sort((a, b) => (b.date || 0) - (a.date || 0))
-      .slice(0, 3)
-  ), [passwords, globalTerms]);
   const favorites = useMemo(() => (
     passwords.filter((item) => item.favorite && matchesSearchTerms(passwordSearchFields(item), globalTerms))
   ), [passwords, globalTerms]);
@@ -2382,25 +2373,6 @@ const Dashboard = () => {
         </div>
       )}
 
-      {/* Recent */}
-      <div>
-        <h2 className="text-sm font-semibold text-[var(--text-muted)] uppercase tracking-wider mb-3 flex items-center"><Clock size={16} className="mr-2"/> {t('recent')}</h2>
-        <div className="bg-[var(--surface)] rounded-2xl border border-[var(--border)] overflow-hidden">
-          {recentPasswords.map((item, i) => (
-            <div key={item.id} className={`p-4 flex items-center justify-between cursor-pointer hover:bg-[var(--surface-hover)] transition-colors ${i !== recentPasswords.length - 1 ? 'border-b border-[var(--border)]' : ''}`} onClick={() => setQuickEdit({ type: 'password', item })}>
-               <div className="flex items-center space-x-3">
-                 <img src={getFavicon(item.url)} alt="" className="w-8 h-8 rounded bg-[var(--bg)] p-0.5" onError={(e) => { e.target.style.display='none'; e.target.nextSibling.style.display='flex'; }} />
-                 <div className="w-8 h-8 rounded bg-[var(--primary)]/20 text-[var(--primary)] hidden items-center justify-center font-bold text-sm">{item.title.charAt(0)}</div>
-                 <div>
-                   <p className="font-medium text-[var(--text)]">{item.title}</p>
-                   <p className="text-xs text-[var(--text-muted)]">{new Date(item.date).toLocaleDateString()}</p>
-                 </div>
-               </div>
-               <Edit size={16} className="text-[var(--text-muted)]" />
-            </div>
-          ))}
-        </div>
-      </div>
     </div>
   );
 };
