@@ -54,9 +54,11 @@ const TRANSLATIONS = {
     signIn: 'Entrar',
     signUp: 'Criar Conta',
     accountIdentifier: 'Email / Username',
+    accountIdentifierPlaceholder: 'Insira o seu e-mail',
     createMasterDesc: 'Crie uma palavra-passe mestra forte para proteger o seu cofre. Não a perca, não poderá ser recuperada.',
     unlockDesc: 'Insira a sua palavra-passe mestra para aceder ao cofre remoto.',
     masterPassword: 'Palavra-passe Mestra',
+    masterPasswordPlaceholder: 'Insira a sua palavra-passe',
     confirmMasterPassword: 'Confirmar Palavra-passe Mestra',
     createVault: 'Criar Cofre na Base de Dados',
     unlockVault: 'Desbloquear Cofre',
@@ -169,9 +171,11 @@ const TRANSLATIONS = {
     signIn: 'Sign In',
     signUp: 'Create Account',
     accountIdentifier: 'Email / Username',
+    accountIdentifierPlaceholder: 'Enter your email',
     createMasterDesc: 'Create a strong master password to secure your vault. Do not lose it, it cannot be recovered.',
     unlockDesc: 'Enter your master password to access your remote vault.',
     masterPassword: 'Master Password',
+    masterPasswordPlaceholder: 'Enter your password',
     confirmMasterPassword: 'Confirm Master Password',
     createVault: 'Create Secure Vault',
     unlockVault: 'Unlock Vault',
@@ -284,9 +288,11 @@ const TRANSLATIONS = {
     signIn: 'Entrar',
     signUp: 'Crear Cuenta',
     accountIdentifier: 'Email / Usuario',
+    accountIdentifierPlaceholder: 'Introduce tu e-mail',
     createMasterDesc: 'Cree una contraseña maestra segura para su bóveda. No la pierda, no se puede recuperar.',
     unlockDesc: 'Introduzca su contraseña maestra para acceder a su bóveda remota.',
     masterPassword: 'Contraseña Maestra',
+    masterPasswordPlaceholder: 'Introduce tu contraseña',
     confirmMasterPassword: 'Confirmar Contraseña',
     createVault: 'Crear Bóveda Segura',
     unlockVault: 'Desbloquear Bóveda',
@@ -1703,7 +1709,10 @@ const AuthScreen = () => {
     passkeyCredentials,
     nativeBiometricsEnabled,
   } = useContext(AppContext);
-  const [identifier, setIdentifier] = useState(getPersistedAuthIdentifier() || '');
+  const [identifier, setIdentifier] = useState(() => {
+    const storedIdentifier = getPersistedAuthIdentifier();
+    return storedIdentifier && storedIdentifier !== 'admin' ? storedIdentifier : '';
+  });
   const [pwd, setPwd] = useState('');
   const [confirmPwd, setConfirmPwd] = useState('');
   const [error, setError] = useState('');
@@ -2221,7 +2230,7 @@ const AuthScreen = () => {
             value={identifier}
             onChange={e => setIdentifier(e.target.value)}
             required={!isSetupState}
-            placeholder="andre@exemplo.com"
+            placeholder={t('accountIdentifierPlaceholder')}
             disabled={isLoading}
           />
           <Input
@@ -2232,6 +2241,7 @@ const AuthScreen = () => {
             onChange={e => setPwd(e.target.value)}
             required
             autoFocus
+            placeholder={t('masterPasswordPlaceholder')}
             disabled={isLoading}
           />
           {isSetupState && !isLoading && (
