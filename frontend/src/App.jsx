@@ -1754,9 +1754,16 @@ const AuthScreen = () => {
         setVaultSalt(vaultStatus.vaultSalt || null);
         setVaultVersion(vaultStatus.vaultVersion || 1);
         if (vaultStatus.user) {
-          setIdentifier(vaultStatus.user.email || vaultStatus.user.username || '');
-          sessionStorage.setItem('pv_auth_identifier', vaultStatus.user.email || vaultStatus.user.username || '');
-          setPersistedAuthIdentifier(vaultStatus.user.email || vaultStatus.user.username || '');
+          const resolvedIdentifier = vaultStatus.user.email || vaultStatus.user.username || '';
+          if (resolvedIdentifier && resolvedIdentifier.toLowerCase() !== 'admin') {
+            setIdentifier(resolvedIdentifier);
+            sessionStorage.setItem('pv_auth_identifier', resolvedIdentifier);
+            setPersistedAuthIdentifier(resolvedIdentifier);
+          } else {
+            setIdentifier('');
+            sessionStorage.removeItem('pv_auth_identifier');
+            localStorage.removeItem(LAST_AUTH_IDENTIFIER_KEY);
+          }
           setUserId(vaultStatus.user.id || null);
         }
         const nextHasPasskeys = IS_ANDROID_NATIVE
@@ -2235,17 +2242,19 @@ const AuthScreen = () => {
           <Input
             label={t('accountIdentifier')}
             type="text"
-            icon={Globe}
-            value={identifier}
-            onChange={e => setIdentifier(e.target.value)}
-            required={!isSetupState}
-            placeholder={t('accountIdentifierPlaceholder')}
-            autoComplete="off"
-            autoCorrect="off"
-            autoCapitalize="none"
-            spellCheck={false}
-            disabled={isLoading}
-          />
+          icon={Globe}
+          value={identifier}
+          onChange={e => setIdentifier(e.target.value)}
+          required={!isSetupState}
+          name="passvault-login-identifier"
+          placeholder={t('accountIdentifierPlaceholder')}
+          autoComplete="new-password"
+          autoCorrect="off"
+          autoCapitalize="none"
+          spellCheck={false}
+          inputMode="email"
+          disabled={isLoading}
+        />
           <Input
             label={t('masterPassword')}
             type="password"
