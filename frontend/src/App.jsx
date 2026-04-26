@@ -2381,8 +2381,22 @@ const Dashboard = () => {
       <div>
         <h2 className="text-sm font-semibold text-[var(--text-muted)] uppercase tracking-wider mb-3">{t('quickActions')}</h2>
         <div className="grid grid-cols-2 gap-3">
-          <Button variant="secondary" onClick={() => setQuickCreate('password')} icon={Plus} className="text-sm">{t('addPassword')}</Button>
-          <Button variant="secondary" onClick={() => setQuickCreate('card')} icon={Plus} className="text-sm">{t('addCard')}</Button>
+          <Button
+            variant="secondary"
+            onClick={() => setQuickCreate('password')}
+            icon={Plus}
+            className="text-sm border-sky-500/20 bg-sky-500/10 text-sky-200 hover:border-sky-400/40 hover:bg-sky-500/20 hover:text-sky-100"
+          >
+            {t('addPassword')}
+          </Button>
+          <Button
+            variant="secondary"
+            onClick={() => setQuickCreate('card')}
+            icon={Plus}
+            className="text-sm border-emerald-500/20 bg-emerald-500/10 text-emerald-200 hover:border-emerald-400/40 hover:bg-emerald-500/20 hover:text-emerald-100"
+          >
+            {t('addCard')}
+          </Button>
         </div>
       </div>
 
