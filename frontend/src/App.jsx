@@ -2385,7 +2385,7 @@ const Dashboard = () => {
             variant="secondary"
             onClick={() => setQuickCreate('password')}
             icon={Plus}
-            className="text-sm border-sky-500/20 bg-sky-500/10 text-sky-200 hover:border-sky-400/40 hover:bg-sky-500/20 hover:text-sky-100"
+            className="text-sm border-sky-500/30 bg-sky-500/20 text-sky-100 hover:border-sky-400/50 hover:bg-sky-500/30 hover:text-white"
           >
             {t('addPassword')}
           </Button>
@@ -2393,7 +2393,7 @@ const Dashboard = () => {
             variant="secondary"
             onClick={() => setQuickCreate('card')}
             icon={Plus}
-            className="text-sm border-emerald-500/20 bg-emerald-500/10 text-emerald-200 hover:border-emerald-400/40 hover:bg-emerald-500/20 hover:text-emerald-100"
+            className="text-sm border-emerald-500/30 bg-emerald-500/20 text-emerald-100 hover:border-emerald-400/50 hover:bg-emerald-500/30 hover:text-white"
           >
             {t('addCard')}
           </Button>
