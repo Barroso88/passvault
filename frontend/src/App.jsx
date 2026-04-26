@@ -1282,58 +1282,6 @@ const AppProvider = ({ children }) => {
     return { ok: true };
   }, [categories, passwords, cards, passkeyCredentials, isLocked, masterHash, vaultKey, vaultSalt, vaultVersion, vaultKeyWrapMaster, userId]);
 
-  const refreshVaultFromServer = useCallback(async () => {
-    if (PREVIEW_MODE || isLocked || !masterHash || !vaultKey) return { ok: false, skipped: true };
-
-    const res = await fetch(`${API_URL}/login`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        userId,
-        hash: masterHash,
-      }),
-    });
-
-    if (!res.ok) {
-      const payload = await res.json().catch(() => ({}));
-      throw new Error(payload?.error || 'Falha ao atualizar o cofre.');
-    }
-
-    const data = await res.json();
-    const nextCategories = normalizeCategories((Array.isArray(data.categories) && data.categories.length > 0) ? data.categories : DEFAULT_CATEGORIES);
-    const nextPasswords = await decryptVaultArray(data.passwords || [], vaultKey);
-    const nextCards = await decryptVaultArray(data.cards || [], vaultKey);
-    const nextPasskeys = data.webauthnCredentials || [];
-
-    setCategories(nextCategories);
-    setPasswords(nextPasswords);
-    setCards(nextCards);
-    setVaultSalt(data.vaultSalt || null);
-    setVaultVersion(data.vaultVersion || 1);
-    setVaultKeyWrapMaster(data.vaultKeyWrapMaster || null);
-    setPasskeyCredentials(nextPasskeys);
-    setHasPasskeys(nextPasskeys.some((credential) => credential.wrappedVaultKey && credential.wrappedMasterHash) || nativeBiometricsEnabled);
-
-    if (data?.user?.id && data.user.id !== userId) {
-      setUserId(data.user.id);
-      sessionStorage.setItem('pv_user_id', data.user.id);
-    }
-    if (data?.user?.email || data?.user?.username) {
-      const resolvedIdentifier = data.user.email || data.user.username || getPersistedAuthIdentifier();
-      if (resolvedIdentifier) {
-        sessionStorage.setItem('pv_auth_identifier', resolvedIdentifier);
-        setPersistedAuthIdentifier(resolvedIdentifier);
-      }
-    }
-    if (data.vaultSalt) {
-      sessionStorage.setItem('pv_vault_salt', data.vaultSalt);
-    }
-    sessionStorage.setItem('pv_master_hash', masterHash);
-    setIsLocked(false);
-
-    return { ok: true };
-  }, [PREVIEW_MODE, isLocked, masterHash, nativeBiometricsEnabled, setCards, setCategories, setHasPasskeys, setPasswords, setUserId, setVaultKeyWrapMaster, setVaultSalt, setVaultVersion, userId, vaultKey]);
-
   // Aplicação da Base de Dados PostgreSQL (Auto-Sync)
   const isInitialMount = useRef(true);
   useEffect(() => {
@@ -1426,7 +1374,6 @@ const AppProvider = ({ children }) => {
     nativeBiometricsEnabled, setNativeBiometricsEnabled,
     registerScreenBackHandler,
     triggerScreenBackHandler,
-    refreshVaultFromServer,
     syncVault,
     t, showToast, copyToClipboard
   };
@@ -4703,7 +4650,6 @@ const MainLayout = () => {
     quickEdit,
     setQuickEdit,
     triggerScreenBackHandler,
-    refreshVaultFromServer,
   } = useContext(AppContext);
   const globalTerms = useMemo(() => splitSearchTerms(globalSearch), [globalSearch]);
 
@@ -4720,55 +4666,6 @@ const MainLayout = () => {
       setActiveTab(nextTab);
     }
   }, [activeTab, cards, categories, globalTerms, passwords, setActiveTab]);
-
-  useEffect(() => {
-    if (PREVIEW_MODE) return undefined;
-
-    let isActive = true;
-    let resumeHandle = null;
-    let focusTimer = null;
-
-    const scheduleRefresh = () => {
-      if (!isActive) return;
-      clearTimeout(focusTimer);
-      focusTimer = setTimeout(() => {
-        if (!isActive) return;
-        refreshVaultFromServer().catch((error) => {
-          console.error('Falha ao atualizar o cofre:', error);
-        });
-      }, 250);
-    };
-
-    const handleVisibilityChange = () => {
-      if (document.visibilityState === 'visible') {
-        scheduleRefresh();
-      }
-    };
-
-    const registerResumeListener = async () => {
-      if (!IS_ANDROID_NATIVE) return;
-      resumeHandle = await CapacitorApp.addListener('resume', scheduleRefresh);
-      if (!isActive && resumeHandle) {
-        await resumeHandle.remove();
-      }
-    };
-
-    window.addEventListener('focus', scheduleRefresh);
-    window.addEventListener('visibilitychange', handleVisibilityChange);
-    registerResumeListener().catch((error) => {
-      console.error('Falha ao registar resume listener Android:', error);
-    });
-
-    return () => {
-      isActive = false;
-      clearTimeout(focusTimer);
-      window.removeEventListener('focus', scheduleRefresh);
-      window.removeEventListener('visibilitychange', handleVisibilityChange);
-      if (resumeHandle) {
-        resumeHandle.remove();
-      }
-    };
-  }, [refreshVaultFromServer]);
 
   const navItems = [
     { id: 'dashboard', icon: LayoutDashboard, label: t('dashboard') },
