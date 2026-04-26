@@ -560,7 +560,16 @@ const getVaultStorageScopes = (userId = '', identifier = '') => {
     .map((value) => normalizeStorageScope(value));
   return scopes.length ? [...new Set(scopes)] : ['global'];
 };
-const getPersistedAuthIdentifier = () => sessionStorage.getItem('pv_auth_identifier') || localStorage.getItem(LAST_AUTH_IDENTIFIER_KEY) || '';
+const getPersistedAuthIdentifier = () => {
+  const stored = sessionStorage.getItem('pv_auth_identifier') || localStorage.getItem(LAST_AUTH_IDENTIFIER_KEY) || '';
+  const normalized = String(stored || '').trim();
+  if (normalized.toLowerCase() === 'admin') {
+    sessionStorage.removeItem('pv_auth_identifier');
+    localStorage.removeItem(LAST_AUTH_IDENTIFIER_KEY);
+    return '';
+  }
+  return normalized;
+};
 const setPersistedAuthIdentifier = (value = '') => {
   const normalized = String(value || '').trim();
   if (normalized) {
@@ -2231,6 +2240,10 @@ const AuthScreen = () => {
             onChange={e => setIdentifier(e.target.value)}
             required={!isSetupState}
             placeholder={t('accountIdentifierPlaceholder')}
+            autoComplete="off"
+            autoCorrect="off"
+            autoCapitalize="none"
+            spellCheck={false}
             disabled={isLoading}
           />
           <Input
