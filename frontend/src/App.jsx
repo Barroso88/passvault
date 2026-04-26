@@ -2799,7 +2799,7 @@ const PasswordManager = () => {
                               className="rounded-full border border-white/10 bg-white/5 p-[5px] text-white/70 transition-colors hover:bg-white/10 hover:text-white sm:p-2"
                               aria-label={`Editar ${cat.name}`}
                             >
-                              <Edit size={11} />
+                              <Edit size={11} className="text-sky-400" />
                             </button>
                             <button
                               type="button"
@@ -2811,7 +2811,7 @@ const PasswordManager = () => {
                               className="rounded-full border border-white/10 bg-white/5 p-[5px] text-white/70 transition-colors hover:bg-white/10 hover:text-white sm:p-2"
                               aria-label={`Apagar ${cat.name}`}
                             >
-                              <Trash size={11} />
+                              <Trash size={11} className="text-rose-400" />
                             </button>
                           </>
                         )}
@@ -3007,7 +3007,7 @@ const PasswordManager = () => {
                   }}
                   className="inline-flex w-full flex-1 items-center justify-center gap-1.5 rounded-full border border-white/8 bg-white/5 px-4 py-2 text-[11px] font-medium text-[var(--text-muted)] transition-colors hover:border-[var(--primary)] hover:text-[var(--primary)] sm:w-auto"
                 >
-                  <Edit size={14} />
+                  <Edit size={14} className="text-sky-400" />
                   <span>Editar</span>
                 </button>
                 <button
@@ -3018,7 +3018,7 @@ const PasswordManager = () => {
                   }}
                   className="inline-flex w-full flex-1 items-center justify-center gap-1.5 rounded-full border border-white/8 bg-white/5 px-4 py-2 text-[11px] font-medium text-[var(--text-muted)] transition-colors hover:border-[var(--danger)] hover:text-[var(--danger)] sm:w-auto"
                 >
-                  <Trash size={14} />
+                  <Trash size={14} className="text-rose-400" />
                   <span>Apagar</span>
                 </button>
               </div>
