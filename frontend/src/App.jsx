@@ -1498,7 +1498,7 @@ const getFavicon = (url, title = '') => {
   if (!finalUrl || finalUrl === 'Website / URL' || finalUrl === 'Sitio Web / URL') return null;
   try {
     const domain = new URL(finalUrl.startsWith('http') ? finalUrl : `https://${finalUrl}`).hostname;
-    return `https://www.google.com/s2/favicons?domain=${domain}&sz=64`;
+    return `https://icon.horse/icon/${domain}`;
   } catch { return null; }
 };
 
