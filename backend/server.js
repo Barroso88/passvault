@@ -1220,7 +1220,9 @@ app.get('/api/favicon', async (req, res) => {
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 4000);
 
-        const response = await fetch(`https://${domain}`, {
+        const googleUrl = `https://t3.gstatic.com/faviconV2?client=SOCIAL&type=FAVICON&fallback_opts=TYPE,SIZE,URL&url=http://${domain}&size=128`;
+        
+        const response = await fetch(googleUrl, {
             headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36' },
             signal: controller.signal
         }).catch(() => null);
@@ -1228,32 +1230,25 @@ app.get('/api/favicon', async (req, res) => {
         clearTimeout(timeoutId);
 
         if (response && response.ok) {
-            const html = await response.text();
-            // Try to find apple-touch-icon, shortcut icon, or icon
-            const match = html.match(/<link[^>]*rel=["']?(?:apple-touch-icon|shortcut icon|icon)["']?[^>]*href=["']?([^"'>]+)["']?[^>]*>/i);
-            
-            if (match && match[1]) {
-                let iconUrl = match[1];
-                if (iconUrl.startsWith('//')) {
-                    iconUrl = `https:${iconUrl}`;
-                } else if (iconUrl.startsWith('/')) {
-                    iconUrl = `https://${domain}${iconUrl}`;
-                } else if (!iconUrl.startsWith('http')) {
-                    iconUrl = `https://${domain}/${iconUrl}`;
-                }
-                
-                faviconCache.set(domain, iconUrl);
-                return res.redirect(iconUrl);
+            const buffer = await response.arrayBuffer();
+            // Google's fallback globe icon for size=128 is exactly 726 bytes
+            if (buffer.byteLength !== 726) {
+                faviconCache.set(domain, googleUrl);
+                return res.redirect(googleUrl);
             }
         }
-    } catch (e) {
-        // Ignore network/parse errors
-    }
+        
+        // If Google failed or returned the globe (726 bytes), use Icon Horse
+        const iconHorseUrl = `https://icon.horse/icon/${domain}`;
+        faviconCache.set(domain, iconHorseUrl);
+        return res.redirect(iconHorseUrl);
 
-    // Default fallback
-    const fallbackUrl = `https://www.google.com/s2/favicons?domain=${domain}&sz=64`;
-    faviconCache.set(domain, fallbackUrl);
-    return res.redirect(fallbackUrl);
+    } catch (e) {
+        // Ultimate fallback
+        const fallbackUrl = `https://t3.gstatic.com/faviconV2?client=SOCIAL&type=FAVICON&fallback_opts=TYPE,SIZE,URL&url=http://${domain}&size=128`;
+        faviconCache.set(domain, fallbackUrl);
+        return res.redirect(fallbackUrl);
+    }
 });
 
 // Gemini helper
