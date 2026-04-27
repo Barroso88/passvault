@@ -1490,16 +1490,31 @@ const inferUrlFallback = (title = '', url = '') => {
   return '';
 };
 
-const getFavicon = (url, title = '') => {
+const getFaviconDomain = (url, title = '') => {
   let finalUrl = url;
   if (!finalUrl || finalUrl === 'Website / URL' || finalUrl === 'Sitio Web / URL') {
     finalUrl = inferUrlFallback(title, finalUrl);
   }
   if (!finalUrl || finalUrl === 'Website / URL' || finalUrl === 'Sitio Web / URL') return null;
   try {
-    const domain = new URL(finalUrl.startsWith('http') ? finalUrl : `https://${finalUrl}`).hostname;
-    return `https://icon.horse/icon/${domain}`;
+    return new URL(finalUrl.startsWith('http') ? finalUrl : `https://${finalUrl}`).hostname;
   } catch { return null; }
+};
+
+const getFavicon = (url, title = '') => {
+  const domain = getFaviconDomain(url, title);
+  if (!domain) return null;
+  return `https://icons.duckduckgo.com/ip3/${domain}.ico`;
+};
+
+const handleFaviconError = (e, domain) => {
+  if (!e.target.dataset.fallbackTried && domain) {
+    e.target.dataset.fallbackTried = 'true';
+    e.target.src = `https://icon.horse/icon/${domain}`;
+  } else {
+    e.target.style.display = 'none';
+    e.target.nextSibling.style.display = 'flex';
+  }
 };
 
 const getCardType = (number) => {
@@ -2411,7 +2426,7 @@ const Dashboard = () => {
           <div className="grid sm:grid-cols-2 gap-3">
             {favorites.map(fav => (
               <div key={fav.id} className="bg-[var(--surface)] p-3 rounded-xl border border-[var(--border)] flex items-center space-x-3 cursor-pointer hover:border-[var(--primary)] transition-colors" onClick={() => setQuickEdit({ type: 'password', item: fav })}>
-                <img src={getFavicon(fav.url, fav.title)} alt="" className="w-8 h-8 rounded-full bg-[var(--bg)] p-1 object-contain" onError={(e) => { e.target.style.display='none'; e.target.nextSibling.style.display='flex'; }} />
+                <img src={getFavicon(fav.url, fav.title)} alt="" className="w-8 h-8 rounded-full bg-[var(--bg)] p-1 object-contain" onError={(e) => handleFaviconError(e, getFaviconDomain(fav.url, fav.title))} />
                 <div className="w-8 h-8 rounded-full bg-[var(--primary)]/20 text-[var(--primary)] hidden items-center justify-center font-bold text-sm">{fav.title.charAt(0)}</div>
                 <div>
                   <p className="font-medium text-[var(--text)]">{fav.title}</p>
@@ -2918,7 +2933,7 @@ const PasswordManager = () => {
                             src={getFavicon(item.url, item.title)}
                             alt=""
                             className="h-7 w-7 object-contain"
-                            onError={(e) => { e.target.style.display='none'; e.target.nextSibling.style.display='flex'; }}
+                            onError={(e) => handleFaviconError(e, getFaviconDomain(item.url, item.title))}
                           />
                           <div className="hidden h-9 w-9 items-center justify-center text-sm font-black text-white/90">
                             {item.title.charAt(0)}
@@ -2959,7 +2974,7 @@ const PasswordManager = () => {
                   src={getFavicon(detailItem.url, detailItem.title)}
                   alt=""
                   className="h-7 w-7 object-contain"
-                  onError={(e) => { e.target.style.display='none'; e.target.nextSibling.style.display='flex'; }}
+                  onError={(e) => handleFaviconError(e, getFaviconDomain(detailItem.url, detailItem.title))}
                 />
                 <div className="hidden h-12 w-12 items-center justify-center text-sm font-black text-white/90">
                   {detailItem.title.charAt(0)}
@@ -3048,7 +3063,7 @@ const PasswordManager = () => {
       <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title={editingItem ? t('edit') : t('addPassword')}>
         <form onSubmit={handleSave} className="space-y-4">
           <div className="flex items-center justify-center mb-4">
-            <img src={getFavicon(form.url, form.title)} alt="" className="w-16 h-16 rounded-2xl bg-[var(--bg)] p-2 border border-[var(--border)]" onError={(e) => { e.target.style.display='none'; e.target.nextSibling.style.display='flex'; }} />
+            <img src={getFavicon(form.url, form.title)} alt="" className="w-16 h-16 rounded-2xl bg-[var(--bg)] p-2 border border-[var(--border)]" onError={(e) => handleFaviconError(e, getFaviconDomain(form.url, form.title))} />
             <div className="w-16 h-16 rounded-2xl bg-[var(--primary)]/20 text-[var(--primary)] hidden items-center justify-center font-bold text-2xl border border-[var(--border)]">{form.title ? form.title.charAt(0) : <Globe/>}</div>
           </div>
 
@@ -3316,7 +3331,7 @@ const GlobalQuickCreateModals = () => {
       <Modal isOpen={quickCreate === 'password'} onClose={() => setQuickCreate(null)} title={t('addPassword')}>
         <form onSubmit={handleSavePassword} className="space-y-4">
           <div className="flex items-center justify-center mb-4">
-            <img src={passwordPreview} alt="" className="w-16 h-16 rounded-2xl bg-[var(--bg)] p-2 border border-[var(--border)]" onError={(e) => { e.target.style.display='none'; e.target.nextSibling.style.display='flex'; }} />
+            <img src={passwordPreview} alt="" className="w-16 h-16 rounded-2xl bg-[var(--bg)] p-2 border border-[var(--border)]" onError={(e) => handleFaviconError(e, getFaviconDomain(passwordForm.url, passwordForm.title))} />
             <div className="w-16 h-16 rounded-2xl bg-[var(--primary)]/20 text-[var(--primary)] hidden items-center justify-center font-bold text-2xl border border-[var(--border)]">{passwordForm.title ? passwordForm.title.charAt(0) : <Globe/>}</div>
           </div>
 
@@ -3460,7 +3475,7 @@ const GlobalQuickEditModals = () => {
         {passwordForm && (
           <form onSubmit={handleSavePassword} className="space-y-4">
             <div className="flex items-center justify-center mb-4">
-              <img src={passwordPreview} alt="" className="w-16 h-16 rounded-2xl bg-[var(--bg)] p-2 border border-[var(--border)]" onError={(e) => { e.target.style.display='none'; e.target.nextSibling.style.display='flex'; }} />
+              <img src={passwordPreview} alt="" className="w-16 h-16 rounded-2xl bg-[var(--bg)] p-2 border border-[var(--border)]" onError={(e) => handleFaviconError(e, getFaviconDomain(passwordForm.url, passwordForm.title))} />
               <div className="w-16 h-16 rounded-2xl bg-[var(--primary)]/20 text-[var(--primary)] hidden items-center justify-center font-bold text-2xl border border-[var(--border)]">{passwordForm.title ? passwordForm.title.charAt(0) : <Globe/>}</div>
             </div>
 
