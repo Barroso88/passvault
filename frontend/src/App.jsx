@@ -1504,7 +1504,7 @@ const getFaviconDomain = (url, title = '') => {
 const getFavicon = (url, title = '') => {
   const domain = getFaviconDomain(url, title);
   if (!domain) return null;
-  return `https://icons.duckduckgo.com/ip3/${domain}.ico`;
+  return `${API_URL}/favicon?domain=${domain}`;
 };
 
 const handleFaviconError = (e, domain) => {

@@ -1203,6 +1203,59 @@ app.post('/api/passkeys/disable', async (req, res) => {
     }
 });
 
+// Favicon Proxy
+const faviconCache = new Map();
+
+app.get('/api/favicon', async (req, res) => {
+    const domain = req.query.domain;
+    if (!domain) {
+        return res.status(400).send('Domain is required');
+    }
+
+    if (faviconCache.has(domain)) {
+        return res.redirect(faviconCache.get(domain));
+    }
+
+    try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 4000);
+
+        const response = await fetch(`https://${domain}`, {
+            headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36' },
+            signal: controller.signal
+        }).catch(() => null);
+
+        clearTimeout(timeoutId);
+
+        if (response && response.ok) {
+            const html = await response.text();
+            // Try to find apple-touch-icon, shortcut icon, or icon
+            const match = html.match(/<link[^>]*rel=["']?(?:apple-touch-icon|shortcut icon|icon)["']?[^>]*href=["']?([^"'>]+)["']?[^>]*>/i);
+            
+            if (match && match[1]) {
+                let iconUrl = match[1];
+                if (iconUrl.startsWith('//')) {
+                    iconUrl = `https:${iconUrl}`;
+                } else if (iconUrl.startsWith('/')) {
+                    iconUrl = `https://${domain}${iconUrl}`;
+                } else if (!iconUrl.startsWith('http')) {
+                    iconUrl = `https://${domain}/${iconUrl}`;
+                }
+                
+                faviconCache.set(domain, iconUrl);
+                return res.redirect(iconUrl);
+            }
+        }
+    } catch (e) {
+        // Ignore network/parse errors
+    }
+
+    // Default fallback
+    const fallbackUrl = `https://www.google.com/s2/favicons?domain=${domain}&sz=64`;
+    faviconCache.set(domain, fallbackUrl);
+    return res.redirect(fallbackUrl);
+});
+
 // Gemini helper
 app.post('/api/ai/generate', async (req, res) => {
     const { prompt, schema } = req.body || {};
