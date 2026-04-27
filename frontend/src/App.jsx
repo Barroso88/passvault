@@ -1490,10 +1490,14 @@ const inferUrlFallback = (title = '', url = '') => {
   return '';
 };
 
-const getFavicon = (url) => {
-  if (!url) return null;
+const getFavicon = (url, title = '') => {
+  let finalUrl = url;
+  if (!finalUrl || finalUrl === 'Website / URL' || finalUrl === 'Sitio Web / URL') {
+    finalUrl = inferUrlFallback(title, finalUrl);
+  }
+  if (!finalUrl || finalUrl === 'Website / URL' || finalUrl === 'Sitio Web / URL') return null;
   try {
-    const domain = new URL(url.startsWith('http') ? url : `https://${url}`).hostname;
+    const domain = new URL(finalUrl.startsWith('http') ? finalUrl : `https://${finalUrl}`).hostname;
     return `https://www.google.com/s2/favicons?domain=${domain}&sz=64`;
   } catch { return null; }
 };
@@ -2407,7 +2411,7 @@ const Dashboard = () => {
           <div className="grid sm:grid-cols-2 gap-3">
             {favorites.map(fav => (
               <div key={fav.id} className="bg-[var(--surface)] p-3 rounded-xl border border-[var(--border)] flex items-center space-x-3 cursor-pointer hover:border-[var(--primary)] transition-colors" onClick={() => setQuickEdit({ type: 'password', item: fav })}>
-                <img src={getFavicon(fav.url)} alt="" className="w-8 h-8 rounded-full bg-[var(--bg)] p-1 object-contain" onError={(e) => { e.target.style.display='none'; e.target.nextSibling.style.display='flex'; }} />
+                <img src={getFavicon(fav.url, fav.title)} alt="" className="w-8 h-8 rounded-full bg-[var(--bg)] p-1 object-contain" onError={(e) => { e.target.style.display='none'; e.target.nextSibling.style.display='flex'; }} />
                 <div className="w-8 h-8 rounded-full bg-[var(--primary)]/20 text-[var(--primary)] hidden items-center justify-center font-bold text-sm">{fav.title.charAt(0)}</div>
                 <div>
                   <p className="font-medium text-[var(--text)]">{fav.title}</p>
@@ -2911,7 +2915,7 @@ const PasswordManager = () => {
                       >
                         <div className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden">
                           <img
-                            src={getFavicon(item.url)}
+                            src={getFavicon(item.url, item.title)}
                             alt=""
                             className="h-7 w-7 object-contain"
                             onError={(e) => { e.target.style.display='none'; e.target.nextSibling.style.display='flex'; }}
@@ -2952,7 +2956,7 @@ const PasswordManager = () => {
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
               <div className="flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-2xl border border-white/8 bg-black/15">
                 <img
-                  src={getFavicon(detailItem.url)}
+                  src={getFavicon(detailItem.url, detailItem.title)}
                   alt=""
                   className="h-7 w-7 object-contain"
                   onError={(e) => { e.target.style.display='none'; e.target.nextSibling.style.display='flex'; }}
@@ -3044,7 +3048,7 @@ const PasswordManager = () => {
       <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title={editingItem ? t('edit') : t('addPassword')}>
         <form onSubmit={handleSave} className="space-y-4">
           <div className="flex items-center justify-center mb-4">
-            <img src={getFavicon(form.url)} alt="" className="w-16 h-16 rounded-2xl bg-[var(--bg)] p-2 border border-[var(--border)]" onError={(e) => { e.target.style.display='none'; e.target.nextSibling.style.display='flex'; }} />
+            <img src={getFavicon(form.url, form.title)} alt="" className="w-16 h-16 rounded-2xl bg-[var(--bg)] p-2 border border-[var(--border)]" onError={(e) => { e.target.style.display='none'; e.target.nextSibling.style.display='flex'; }} />
             <div className="w-16 h-16 rounded-2xl bg-[var(--primary)]/20 text-[var(--primary)] hidden items-center justify-center font-bold text-2xl border border-[var(--border)]">{form.title ? form.title.charAt(0) : <Globe/>}</div>
           </div>
 
@@ -3304,7 +3308,7 @@ const GlobalQuickCreateModals = () => {
     }
   };
 
-  const passwordPreview = passwordForm.url ? getFavicon(passwordForm.url) : null;
+  const passwordPreview = (passwordForm.url || passwordForm.title) ? getFavicon(passwordForm.url, passwordForm.title) : null;
   const cardType = getCardType(cardForm.number || '');
 
   return (
@@ -3447,7 +3451,7 @@ const GlobalQuickEditModals = () => {
     setQuickEdit(null);
   };
 
-  const passwordPreview = passwordForm?.url ? getFavicon(passwordForm.url) : null;
+  const passwordPreview = (passwordForm?.url || passwordForm?.title) ? getFavicon(passwordForm.url, passwordForm.title) : null;
   const cardType = getCardType(cardForm?.number || '');
 
   return (
