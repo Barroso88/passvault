@@ -1256,8 +1256,13 @@ const AppProvider = ({ children }) => {
   } = {}) => {
     if (PREVIEW_MODE || isLocked || !hash || !key) return { ok: false, skipped: true };
 
-    const encryptedPasswords = await encryptVaultArray(nextPasswords, key);
-    const encryptedCards = await encryptVaultArray(nextCards, key);
+    const THIRTY_DAYS = 30 * 24 * 60 * 60 * 1000;
+    const now = Date.now();
+    const cleanPasswords = nextPasswords.filter(p => !p.deletedAt || (now - p.deletedAt) <= THIRTY_DAYS);
+    const cleanCards = nextCards.filter(c => !c.deletedAt || (now - c.deletedAt) <= THIRTY_DAYS);
+
+    const encryptedPasswords = await encryptVaultArray(cleanPasswords, key);
+    const encryptedCards = await encryptVaultArray(cleanCards, key);
     const res = await fetch(`${API_URL}/sync`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
@@ -1361,12 +1366,15 @@ const AppProvider = ({ children }) => {
       return false;
     }
   }, []);
+  const activePasswords = useMemo(() => passwords.filter(p => !p.deletedAt), [passwords]);
+  const activeCards = useMemo(() => cards.filter(c => !c.deletedAt), [cards]);
 
   const contextValue = {
     theme, setTheme, lang, setLang, timeoutMinutes, setTimeoutMinutes,
     isLocked, setIsLocked, userId, setUserId, masterHash, setMasterHash, vaultSalt, setVaultSalt, vaultVersion, setVaultVersion, vaultKey, setVaultKey, vaultKeyRaw, setVaultKeyRaw, vaultKeyWrapMaster, setVaultKeyWrapMaster, hasPasskeys, setHasPasskeys, passkeyCredentials, setPasskeyCredentials,
     categories, setCategories,
-    passwords, setPasswords, cards, setCards,
+    passwords: activePasswords, rawPasswords: passwords, setPasswords,
+    cards: activeCards, rawCards: cards, setCards,
     activeTab, setActiveTab,
     globalSearch, setGlobalSearch,
     quickCreate, setQuickCreate,
@@ -2602,8 +2610,8 @@ const PasswordManager = () => {
   };
 
   const handleDelete = (id) => {
-    if(window.confirm(t('confirmDelete'))) {
-      setPasswords(prev => prev.filter(p => p.id !== id));
+    if(window.confirm(t('confirmDelete') || 'Mover para o Lixo?')) {
+      setPasswords(prev => prev.map(p => p.id === id ? { ...p, deletedAt: Date.now() } : p));
       setIsModalOpen(false);
     }
   };
@@ -3161,7 +3169,10 @@ const CardManager = () => {
   };
 
   const handleDelete = (id) => {
-    if(window.confirm(t('confirmDelete'))) { setCards(prev => prev.filter(c => c.id !== id)); setIsModalOpen(false); }
+    if(window.confirm(t('confirmDelete') || 'Mover para o Lixo?')) { 
+      setCards(prev => prev.map(c => c.id === id ? { ...c, deletedAt: Date.now() } : c)); 
+      setIsModalOpen(false); 
+    }
   };
 
   const filteredCards = useMemo(() => (
@@ -3708,7 +3719,7 @@ const SettingsScreen = () => {
     timeoutMinutes, setTimeoutMinutes,
     t, showToast,
     setIsLocked, setMasterHash, setVaultKey, setVaultKeyRaw, setVaultKeyWrapMaster, setVaultSalt, setVaultVersion, setActiveTab,
-    userId, masterHash, vaultSalt, vaultVersion, vaultKey, vaultKeyRaw, vaultKeyWrapMaster, passwords, setPasswords, cards, setCards, categories, setCategories,
+    userId, masterHash, vaultSalt, vaultVersion, vaultKey, vaultKeyRaw, vaultKeyWrapMaster, passwords, rawPasswords, setPasswords, cards, rawCards, setCards, categories, setCategories,
     passkeyCredentials, setPasskeyCredentials, hasPasskeys, setHasPasskeys, nativeBiometricsEnabled, setNativeBiometricsEnabled, syncVault, registerScreenBackHandler,
   } = useContext(AppContext);
   const [isMasterModalOpen, setIsMasterModalOpen] = useState(false);
@@ -3746,6 +3757,37 @@ const SettingsScreen = () => {
       importable,
     };
   }, [bitwardenImportRows]);
+
+  const deletedPasswords = useMemo(() => (rawPasswords || []).filter(p => p.deletedAt), [rawPasswords]);
+  const deletedCards = useMemo(() => (rawCards || []).filter(c => c.deletedAt), [rawCards]);
+  const trashItems = useMemo(() => [...deletedPasswords.map(p => ({...p, type: 'password'})), ...deletedCards.map(c => ({...c, type: 'card'}))].sort((a,b) => b.deletedAt - a.deletedAt), [deletedPasswords, deletedCards]);
+
+  const handleRestore = (item) => {
+    if (item.type === 'password') {
+      setPasswords(prev => prev.map(p => p.id === item.id ? { ...p, deletedAt: undefined } : p));
+    } else {
+      setCards(prev => prev.map(c => c.id === item.id ? { ...c, deletedAt: undefined } : c));
+    }
+    showToast('Restaurado com sucesso');
+  };
+
+  const handlePermanentDelete = (item) => {
+    if(window.confirm('Apagar permanentemente? Não pode ser desfeito.')) {
+      if (item.type === 'password') {
+        setPasswords(prev => prev.filter(p => p.id !== item.id));
+      } else {
+        setCards(prev => prev.filter(c => c.id !== item.id));
+      }
+    }
+  };
+
+  const handleEmptyTrash = () => {
+    if(window.confirm('Esvaziar lixo? Todos os itens serão apagados permanentemente.')) {
+      setPasswords(prev => prev.filter(p => !p.deletedAt));
+      setCards(prev => prev.filter(c => !c.deletedAt));
+      showToast('Lixo esvaziado');
+    }
+  };
 
   const resetBitwardenImport = () => {
     setBitwardenImportRows([]);
@@ -4579,6 +4621,54 @@ const SettingsScreen = () => {
             </div>
           )}
         </div>
+      </div>
+
+      <div className="pt-8 border-t border-[var(--border)] mb-8">
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-xl font-bold flex items-center text-[var(--text)]">
+            <Trash size={24} className="mr-2 text-[var(--danger)]" />
+            Caixote do Lixo
+          </h2>
+          {trashItems.length > 0 && (
+            <Button variant="danger" className="text-sm py-1.5 px-3" onClick={handleEmptyTrash}>
+              Esvaziar Lixo
+            </Button>
+          )}
+        </div>
+        <p className="text-sm text-[var(--text-muted)] mb-4">Itens no lixo são apagados permanentemente e automaticamente após 30 dias.</p>
+        
+        {trashItems.length === 0 ? (
+          <div className="rounded-2xl border border-dashed border-[var(--border)] bg-[var(--bg)]/50 px-4 py-8 text-center text-sm text-[var(--text-muted)]">
+            O caixote do lixo está vazio.
+          </div>
+        ) : (
+          <div className="space-y-2">
+            {trashItems.map(item => {
+              const daysLeft = Math.max(0, 30 - Math.floor((Date.now() - item.deletedAt) / (1000 * 60 * 60 * 24)));
+              return (
+                <div key={item.id} className="flex items-center justify-between p-3 rounded-xl bg-[var(--surface)] border border-[var(--border)]">
+                  <div className="flex items-center space-x-3 overflow-hidden">
+                    <div className="w-10 h-10 rounded-lg bg-[var(--bg)] border border-[var(--border)] flex items-center justify-center shrink-0">
+                      {item.type === 'password' ? <Key size={18} className="text-[var(--text-muted)]" /> : <CreditCard size={18} className="text-[var(--text-muted)]" />}
+                    </div>
+                    <div className="min-w-0">
+                      <p className="font-semibold text-sm text-[var(--text)] truncate">{item.title || item.name || 'Sem título'}</p>
+                      <p className="text-xs text-[var(--danger)]">{daysLeft} dias restantes</p>
+                    </div>
+                  </div>
+                  <div className="flex space-x-2 shrink-0 ml-2">
+                    <button onClick={() => handleRestore(item)} className="p-2 rounded-lg text-emerald-500 hover:bg-emerald-500/10 transition-colors" title="Restaurar">
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>
+                    </button>
+                    <button onClick={() => handlePermanentDelete(item)} className="p-2 rounded-lg text-[var(--danger)] hover:bg-[var(--danger)]/10 transition-colors" title="Apagar permanentemente">
+                      <Trash size={16} />
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
       </div>
 
       <div className="pt-8 border-t border-[var(--border)]">
