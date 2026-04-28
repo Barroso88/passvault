@@ -4,9 +4,9 @@ import { App as CapacitorApp } from '@capacitor/app';
 import { startRegistration, startAuthentication, base64URLStringToBuffer } from '@simplewebauthn/browser';
 import { BiometricAuth, AndroidBiometryStrength } from '@aparajita/capacitor-biometric-auth';
 import { SecureStorage } from '@aparajita/capacitor-secure-storage';
-import { 
-  Lock, Unlock, Shield, Key, CreditCard, LayoutDashboard, Settings, Plus, 
-  Search, Eye, EyeOff, Copy, Trash, Edit, Check, Star, AlertTriangle, 
+import {
+  Lock, Unlock, Shield, Key, CreditCard, LayoutDashboard, Settings, Plus,
+  Search, Eye, EyeOff, Copy, Trash, Edit, Check, Star, AlertTriangle,
   LogOut, Clock, Globe, Menu, X, ChevronRight, ChevronDown, Hash, RefreshCw, Palette, Sparkles, Loader2,
   Folder, FolderPlus, ArrowLeft, Upload, FileText, ArrowLeftRight
 } from 'lucide-react';
@@ -1195,7 +1195,7 @@ const AppProvider = ({ children }) => {
   const [theme, setTheme] = useState(localStorage.getItem('pv_theme') || 'dark');
   const [lang, setLang] = useState(localStorage.getItem('pv_lang') || 'pt');
   const [timeoutMinutes, setTimeoutMinutes] = useState(Number(localStorage.getItem('pv_timeout')) || 5);
-  
+
   // Estado de Autenticação
   const [isLocked, setIsLocked] = useState(PREVIEW_MODE ? false : true);
   const [userId, setUserId] = useState(PREVIEW_MODE ? 'preview-user' : (sessionStorage.getItem('pv_user_id') || null));
@@ -1216,7 +1216,7 @@ const AppProvider = ({ children }) => {
   const [nativeBiometricsEnabled, setNativeBiometricsEnabled] = useState(
     PREVIEW_MODE ? false : readFromStorageScopes(ANDROID_BIOMETRIC_ENABLED_KEY, getVaultStorageScopes(sessionStorage.getItem('pv_user_id'), persistedAuthIdentifier), false)
   );
-  
+
   // Estado do Cofre (Agora inicializado vazio, preenchido via Postgres)
   const [categories, setCategories] = useState(
     PREVIEW_MODE ? normalizeCategories(readPreviewState('pv_preview_categories', DEFAULT_CATEGORIES)) : normalizeCategories(DEFAULT_CATEGORIES)
@@ -1227,7 +1227,7 @@ const AppProvider = ({ children }) => {
   const [cards, setCards] = useState(
     PREVIEW_MODE ? readPreviewState('pv_preview_cards', PREVIEW_CARDS) : []
   );
-  
+
   const [activeTab, setActiveTab] = useState('dashboard');
   const [globalSearch, setGlobalSearch] = useState('');
   const [quickCreate, setQuickCreate] = useState(null);
@@ -1340,9 +1340,9 @@ const AppProvider = ({ children }) => {
   const isInitialMount = useRef(true);
   useEffect(() => {
     if (PREVIEW_MODE) return;
-    if (isInitialMount.current) { 
-      isInitialMount.current = false; 
-      return; 
+    if (isInitialMount.current) {
+      isInitialMount.current = false;
+      return;
     }
     syncVault().catch(err => console.error("Falha ao sincronizar com Postgres:", err));
   }, [categories, passwords, cards, isLocked, masterHash, vaultKey, vaultSalt, syncVault, userId]);
@@ -1363,15 +1363,15 @@ const AppProvider = ({ children }) => {
     const resetTimer = () => {
       clearTimeout(timer);
       timer = setTimeout(() => {
-      setIsLocked(true);
-      sessionStorage.removeItem('pv_master_hash');
-      sessionStorage.removeItem('pv_vault_salt');
-      setMasterHash(null);
-      setVaultKey(null);
-      setVaultKeyRaw(null);
-      setVaultKeyWrapMaster(null);
-      setVaultSalt(null);
-    }, timeoutMinutes * 60000);
+        setIsLocked(true);
+        sessionStorage.removeItem('pv_master_hash');
+        sessionStorage.removeItem('pv_vault_salt');
+        setMasterHash(null);
+        setVaultKey(null);
+        setVaultKeyRaw(null);
+        setVaultKeyWrapMaster(null);
+        setVaultSalt(null);
+      }, timeoutMinutes * 60000);
     };
     window.addEventListener('mousemove', resetTimer);
     window.addEventListener('keypress', resetTimer);
@@ -1946,7 +1946,7 @@ const AuthScreen = () => {
       setVerificationMessage(`Enviámos um código para ${normalizedIdentifier}.`);
       setIsVerificationPending(true);
       setError('');
-    } catch(err) {
+    } catch (err) {
       setError(err.message || "Falha de rede. Servidor Docker em execução?");
     }
     setIsLoading(false);
@@ -2110,7 +2110,7 @@ const AuthScreen = () => {
         await loadVaultData(h, vaultKeyMaterial.key, decryptedVaultKeyRaw, data.user || null);
         setVaultVersion(data.vaultVersion || 2);
         setPasskeyCredentials(nextPasskeys);
-      setHasPasskeys(nextPasskeys.some((credential) => credential.wrappedVaultKey && credential.wrappedMasterHash) || nativeBiometricsEnabled);
+        setHasPasskeys(nextPasskeys.some((credential) => credential.wrappedVaultKey && credential.wrappedMasterHash) || nativeBiometricsEnabled);
       } else {
         const migrationSalt = generateVaultSalt();
         const migrationMaterial = await deriveVaultMaterial(pwd, migrationSalt);
@@ -2157,7 +2157,7 @@ const AuthScreen = () => {
         setError('');
         setIsLocked(false);
       }
-    } catch(err) {
+    } catch (err) {
       setError(err.message || "Falha de rede. Servidor Docker em execução?");
     }
     setIsLoading(false);
@@ -2296,19 +2296,19 @@ const AuthScreen = () => {
           <Input
             label={t('accountIdentifier')}
             type="text"
-          icon={Globe}
-          value={identifier}
-          onChange={e => setIdentifier(e.target.value)}
-          required={!isSetupState}
-          name="passvault-login-identifier"
-          placeholder={t('accountIdentifierPlaceholder')}
-          autoComplete="new-password"
-          autoCorrect="off"
-          autoCapitalize="none"
-          spellCheck={false}
-          inputMode="email"
-          disabled={isLoading}
-        />
+            icon={Globe}
+            value={identifier}
+            onChange={e => setIdentifier(e.target.value)}
+            required={!isSetupState}
+            name="passvault-login-identifier"
+            placeholder={t('accountIdentifierPlaceholder')}
+            autoComplete="new-password"
+            autoCorrect="off"
+            autoCapitalize="none"
+            spellCheck={false}
+            inputMode="email"
+            disabled={isLoading}
+          />
           <Input
             label={t('masterPassword')}
             type="password"
@@ -2367,7 +2367,7 @@ const AuthScreen = () => {
               </div>
             </div>
           )}
-          {error && <p className="text-[var(--danger)] text-sm flex items-center"><AlertTriangle size={14} className="mr-1"/> {error}</p>}
+          {error && <p className="text-[var(--danger)] text-sm flex items-center"><AlertTriangle size={14} className="mr-1" /> {error}</p>}
           <Button
             type="submit"
             disabled={isLoading || (isSetupState && isVerificationPending)}
@@ -2402,7 +2402,7 @@ const Dashboard = () => {
   const globalTerms = useMemo(() => splitSearchTerms(globalSearch), [globalSearch]);
   const activePasswords = useMemo(() => passwords.filter((item) => !isTrashedVaultEntry(item)), [passwords]);
   const activeCards = useMemo(() => cards.filter((item) => !isTrashedVaultEntry(item)), [cards]);
-  
+
   const favorites = useMemo(() => (
     activePasswords.filter((item) => item.favorite && matchesSearchTerms(passwordSearchFields(item), globalTerms))
   ), [activePasswords, globalTerms]);
@@ -2410,7 +2410,7 @@ const Dashboard = () => {
   return (
     <div className="space-y-6 animate-in fade-in">
       <h1 className="text-2xl font-bold text-[var(--text)]">{t('dashboard')}</h1>
-      
+
       {/* Stats */}
       <div className="grid grid-cols-2 gap-4">
         <div className="bg-[var(--surface)] p-4 rounded-2xl border border-[var(--border)] flex items-center justify-between shadow-sm">
@@ -2459,11 +2459,11 @@ const Dashboard = () => {
       {/* Favorites */}
       {favorites.length > 0 && (
         <div>
-          <h2 className="text-sm font-semibold text-[var(--text-muted)] uppercase tracking-wider mb-3 flex items-center"><Star size={16} className="mr-2 text-yellow-500"/> {t('favorites')}</h2>
+          <h2 className="text-sm font-semibold text-[var(--text-muted)] uppercase tracking-wider mb-3 flex items-center"><Star size={16} className="mr-2 text-yellow-500" /> {t('favorites')}</h2>
           <div className="grid sm:grid-cols-2 gap-3">
             {favorites.map(fav => (
               <div key={fav.id} className="bg-[var(--surface)] p-3 rounded-xl border border-[var(--border)] flex items-center space-x-3 cursor-pointer hover:border-[var(--primary)] transition-colors" onClick={() => setQuickEdit({ type: 'password', item: fav })}>
-                <img src={getFavicon(fav.url)} alt="" className="w-8 h-8 rounded-full bg-[var(--bg)] p-1 object-contain" onError={(e) => { e.target.style.display='none'; e.target.nextSibling.style.display='flex'; }} />
+                <img src={getFavicon(fav.url)} alt="" className="w-8 h-8 rounded-full bg-[var(--bg)] p-1 object-contain" onError={(e) => { e.target.style.display = 'none'; e.target.nextSibling.style.display = 'flex'; }} />
                 <div className="w-8 h-8 rounded-full bg-[var(--primary)]/20 text-[var(--primary)] hidden items-center justify-center font-bold text-sm">{fav.title.charAt(0)}</div>
                 <div>
                   <p className="font-medium text-[var(--text)]">{fav.title}</p>
@@ -2597,7 +2597,8 @@ const PasswordManager = () => {
 
     if (!window.confirm(`${t('removeOtherDuplicatesConfirm')} ${removed.length} ${t('items')}.`)) return;
 
-    const nextPasswords = [...trashedPasswords, ...kept];
+    const removedIds = new Set(removed.map(r => r.id));
+    const nextPasswords = passwords.filter(p => !removedIds.has(p.id));
     setPasswords(nextPasswords);
     if (selectedCategory === 'Other') {
       setDetailItem(null);
@@ -2641,7 +2642,7 @@ const PasswordManager = () => {
   };
 
   const handleDelete = (id) => {
-    if(window.confirm(t('confirmDelete'))) {
+    if (window.confirm(t('confirmDelete'))) {
       setPasswords(prev => prev.map((p) => (p.id === id ? { ...p, deletedAt: Date.now() } : p)));
       setIsModalOpen(false);
     }
@@ -2664,8 +2665,8 @@ const PasswordManager = () => {
       const result = await callGemini(prompt, schema);
       if (result) {
         const fallbackUrl = inferUrlFallback(form.title, form.url);
-        setForm(prev => ({ 
-          ...prev, 
+        setForm(prev => ({
+          ...prev,
           url: result.url || fallbackUrl || prev.url
         }));
         setAiFallbackNotice('');
@@ -2972,7 +2973,7 @@ const PasswordManager = () => {
                             src={getFavicon(item.url)}
                             alt=""
                             className="h-7 w-7 object-contain"
-                            onError={(e) => { e.target.style.display='none'; e.target.nextSibling.style.display='flex'; }}
+                            onError={(e) => { e.target.style.display = 'none'; e.target.nextSibling.style.display = 'flex'; }}
                           />
                           <div className="hidden h-9 w-9 items-center justify-center text-sm font-black text-white/90">
                             {item.title.charAt(0)}
@@ -3004,171 +3005,171 @@ const PasswordManager = () => {
           </div>
         )}
 
-      <Modal isOpen={!!detailItem} onClose={() => setDetailItem(null)} title={detailItem?.title || t('passwords')}>
-        {detailItem && (
-          <div className="space-y-4">
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-              <div className="flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-2xl border border-white/8 bg-black/15">
-                <img
-                  src={getFavicon(detailItem.url)}
-                  alt=""
-                  className="h-7 w-7 object-contain"
-                  onError={(e) => { e.target.style.display='none'; e.target.nextSibling.style.display='flex'; }}
-                />
-                <div className="hidden h-12 w-12 items-center justify-center text-sm font-black text-white/90">
-                  {detailItem.title.charAt(0)}
-                </div>
-              </div>
-              <div className="min-w-0">
-                <h3 className="truncate text-lg font-semibold text-[var(--text)]">{detailItem.title}</h3>
-                <p className="truncate text-sm text-[var(--text-muted)]">{selectedCategory}</p>
-              </div>
-            </div>
-
-            <div className="space-y-3">
-              <div className="flex items-center gap-3 rounded-2xl border border-white/8 bg-black/10 px-3 py-3">
-                <div className="min-w-0 flex-1">
-                  <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-[var(--text-muted)]">User</p>
-                  <p className="mt-1 truncate text-sm text-[var(--text)]">{detailItem.username || '—'}</p>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => copyToClipboard(detailItem.username)}
-                  className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-white/8 bg-white/5 text-[var(--text-muted)] transition-colors hover:border-[var(--primary)] hover:text-[var(--primary)]"
-                  title="Copiar utilizador"
-                >
-                  <Copy size={13} />
-                </button>
-              </div>
-
-              <div className="flex items-center gap-3 rounded-2xl border border-[var(--primary)]/20 bg-[linear-gradient(135deg,rgba(124,92,255,0.14),rgba(255,255,255,0.03))] px-3 py-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]">
-                <div className="min-w-0 flex-1">
-                  <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-[var(--primary)]/90">Password</p>
-                  <div className="mt-1">
-                    <SecretText
-                      text={detailItem.password}
-                      showCopy={false}
-                      textClassName="truncate text-sm font-semibold tracking-[0.16em] text-[var(--text)]"
-                      toggleClassName="rounded-full border border-[var(--primary)]/20 bg-black/10 p-1.5 text-[var(--primary)] hover:bg-[var(--primary)]/12"
-                    />
+        <Modal isOpen={!!detailItem} onClose={() => setDetailItem(null)} title={detailItem?.title || t('passwords')}>
+          {detailItem && (
+            <div className="space-y-4">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+                <div className="flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-2xl border border-white/8 bg-black/15">
+                  <img
+                    src={getFavicon(detailItem.url)}
+                    alt=""
+                    className="h-7 w-7 object-contain"
+                    onError={(e) => { e.target.style.display = 'none'; e.target.nextSibling.style.display = 'flex'; }}
+                  />
+                  <div className="hidden h-12 w-12 items-center justify-center text-sm font-black text-white/90">
+                    {detailItem.title.charAt(0)}
                   </div>
                 </div>
-                <button
-                  type="button"
-                  onClick={() => copyToClipboard(detailItem.password)}
-                  className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-[var(--primary)]/20 bg-black/10 text-[var(--primary)] transition-colors hover:border-[var(--primary)] hover:bg-[var(--primary)]/12"
-                  title="Copiar password"
-                >
-                  <Key size={13} />
-                </button>
-              </div>
-
-              {detailItem.notes && (
-                <div className="rounded-2xl border border-white/8 bg-black/8 px-3 py-3">
-                  <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-[var(--text-muted)]">Notas</p>
-                  <p className="mt-1 text-sm leading-relaxed text-[var(--text)] whitespace-pre-wrap">{detailItem.notes}</p>
+                <div className="min-w-0">
+                  <h3 className="truncate text-lg font-semibold text-[var(--text)]">{detailItem.title}</h3>
+                  <p className="truncate text-sm text-[var(--text-muted)]">{selectedCategory}</p>
                 </div>
-              )}
-
-              <div className="flex flex-col gap-2 pt-1 sm:flex-row">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setDetailItem(null);
-                    handleOpenModal(detailItem);
-                  }}
-                  className="inline-flex w-full flex-1 items-center justify-center gap-1.5 rounded-full border border-white/8 bg-white/5 px-4 py-2 text-[11px] font-medium text-[var(--text-muted)] transition-colors hover:border-[var(--primary)] hover:text-[var(--primary)] sm:w-auto"
-                >
-                  <Edit size={14} className="text-sky-400" />
-                  <span>Editar</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setDetailItem(null);
-                    handleDelete(detailItem.id);
-                  }}
-                  className="inline-flex w-full flex-1 items-center justify-center gap-1.5 rounded-full border border-white/8 bg-white/5 px-4 py-2 text-[11px] font-medium text-[var(--text-muted)] transition-colors hover:border-[var(--danger)] hover:text-[var(--danger)] sm:w-auto"
-                >
-                  <Trash size={14} className="text-rose-400" />
-                  <span>Apagar</span>
-                </button>
               </div>
-            </div>
-          </div>
-        )}
-      </Modal>
 
-      <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title={editingItem ? t('edit') : t('addPassword')}>
-        <form onSubmit={handleSave} className="space-y-4">
-          <div className="flex items-center justify-center mb-4">
-            <img src={getFavicon(form.url)} alt="" className="w-16 h-16 rounded-2xl bg-[var(--bg)] p-2 border border-[var(--border)]" onError={(e) => { e.target.style.display='none'; e.target.nextSibling.style.display='flex'; }} />
-            <div className="w-16 h-16 rounded-2xl bg-[var(--primary)]/20 text-[var(--primary)] hidden items-center justify-center font-bold text-2xl border border-[var(--border)]">{form.title ? form.title.charAt(0) : <Globe/>}</div>
-          </div>
+              <div className="space-y-3">
+                <div className="flex items-center gap-3 rounded-2xl border border-white/8 bg-black/10 px-3 py-3">
+                  <div className="min-w-0 flex-1">
+                    <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-[var(--text-muted)]">User</p>
+                    <p className="mt-1 truncate text-sm text-[var(--text)]">{detailItem.username || '—'}</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => copyToClipboard(detailItem.username)}
+                    className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-white/8 bg-white/5 text-[var(--text-muted)] transition-colors hover:border-[var(--primary)] hover:text-[var(--primary)]"
+                    title="Copiar utilizador"
+                  >
+                    <Copy size={13} />
+                  </button>
+                </div>
 
-          <div className="flex items-center justify-between mb-2">
-            <button type="button" onClick={() => setForm({...form, favorite: !form.favorite})} className={`text-sm flex items-center ${form.favorite ? 'text-yellow-500' : 'text-[var(--text-muted)]'}`}>
-              <Star size={16} className={`mr-1 ${form.favorite ? 'fill-current' : ''}`} /> {t('favorites')}
-            </button>
-            <div className="flex items-center space-x-2">
-              <button 
-                type="button" 
-                onClick={handleSmartFill} 
-                disabled={isGeneratingInfo || (!form.title && !form.url)}
-                className="flex items-center text-xs font-medium px-2 py-1 rounded bg-gradient-to-r from-purple-500/10 to-pink-500/10 text-purple-500 hover:from-purple-500/20 hover:to-pink-500/20 border border-purple-500/30 transition-all disabled:opacity-50"
-              >
-                {isGeneratingInfo ? <Loader2 size={12} className="animate-spin mr-1"/> : <Sparkles size={12} className="mr-1"/>}
-                {t('smartFill')}
-              </button>
-            <select value={form.category} onChange={e => setForm({...form, category: e.target.value})} className="bg-transparent text-sm text-[var(--text)] border border-[var(--border)] rounded-lg p-1 outline-none">
-                {categoryOptions.map(c => <option key={c} value={c}>{c}</option>)}
-              </select>
-            </div>
-          </div>
+                <div className="flex items-center gap-3 rounded-2xl border border-[var(--primary)]/20 bg-[linear-gradient(135deg,rgba(124,92,255,0.14),rgba(255,255,255,0.03))] px-3 py-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]">
+                  <div className="min-w-0 flex-1">
+                    <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-[var(--primary)]/90">Password</p>
+                    <div className="mt-1">
+                      <SecretText
+                        text={detailItem.password}
+                        showCopy={false}
+                        textClassName="truncate text-sm font-semibold tracking-[0.16em] text-[var(--text)]"
+                        toggleClassName="rounded-full border border-[var(--primary)]/20 bg-black/10 p-1.5 text-[var(--primary)] hover:bg-[var(--primary)]/12"
+                      />
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => copyToClipboard(detailItem.password)}
+                    className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-[var(--primary)]/20 bg-black/10 text-[var(--primary)] transition-colors hover:border-[var(--primary)] hover:bg-[var(--primary)]/12"
+                    title="Copiar password"
+                  >
+                    <Key size={13} />
+                  </button>
+                </div>
 
-          {aiFallbackNotice && (
-            <div className="rounded-xl border border-amber-500/30 bg-amber-500/8 px-3 py-2 text-xs text-amber-200/90 flex items-center gap-2">
-              <AlertTriangle size={14} className="shrink-0" />
-              <span>{aiFallbackNotice}</span>
+                {detailItem.notes && (
+                  <div className="rounded-2xl border border-white/8 bg-black/8 px-3 py-3">
+                    <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-[var(--text-muted)]">Notas</p>
+                    <p className="mt-1 text-sm leading-relaxed text-[var(--text)] whitespace-pre-wrap">{detailItem.notes}</p>
+                  </div>
+                )}
+
+                <div className="flex flex-col gap-2 pt-1 sm:flex-row">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setDetailItem(null);
+                      handleOpenModal(detailItem);
+                    }}
+                    className="inline-flex w-full flex-1 items-center justify-center gap-1.5 rounded-full border border-white/8 bg-white/5 px-4 py-2 text-[11px] font-medium text-[var(--text-muted)] transition-colors hover:border-[var(--primary)] hover:text-[var(--primary)] sm:w-auto"
+                  >
+                    <Edit size={14} className="text-sky-400" />
+                    <span>Editar</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setDetailItem(null);
+                      handleDelete(detailItem.id);
+                    }}
+                    className="inline-flex w-full flex-1 items-center justify-center gap-1.5 rounded-full border border-white/8 bg-white/5 px-4 py-2 text-[11px] font-medium text-[var(--text-muted)] transition-colors hover:border-[var(--danger)] hover:text-[var(--danger)] sm:w-auto"
+                  >
+                    <Trash size={14} className="text-rose-400" />
+                    <span>Apagar</span>
+                  </button>
+                </div>
+              </div>
             </div>
           )}
+        </Modal>
 
-          <Input label={t('serviceName')} value={form.title} onChange={e => setForm({...form, title: e.target.value})} required />
-          <Input label={t('url')} value={form.url} onChange={e => setForm({...form, url: e.target.value})} placeholder="https://" />
-          <Input label={t('username')} value={form.username} onChange={e => setForm({...form, username: e.target.value})} />
-          
-          <div className="relative">
-            <Input label={t('password')} type={showPwdInForm ? 'text' : 'password'} value={form.password} onChange={e => setForm({...form, password: e.target.value})} rightIcon={showPwdInForm ? <EyeOff size={18}/> : <Eye size={18}/>} onRightIconClick={() => setShowPwdInForm(!showPwdInForm)} required />
-            {form.password && (
-               <div className="absolute top-1 right-1 flex items-center space-x-1">
-                 <div className={`h-1.5 w-10 rounded-full ${checkPasswordStrength(form.password).color}`}></div>
-               </div>
+        <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title={editingItem ? t('edit') : t('addPassword')}>
+          <form onSubmit={handleSave} className="space-y-4">
+            <div className="flex items-center justify-center mb-4">
+              <img src={getFavicon(form.url)} alt="" className="w-16 h-16 rounded-2xl bg-[var(--bg)] p-2 border border-[var(--border)]" onError={(e) => { e.target.style.display = 'none'; e.target.nextSibling.style.display = 'flex'; }} />
+              <div className="w-16 h-16 rounded-2xl bg-[var(--primary)]/20 text-[var(--primary)] hidden items-center justify-center font-bold text-2xl border border-[var(--border)]">{form.title ? form.title.charAt(0) : <Globe />}</div>
+            </div>
+
+            <div className="flex items-center justify-between mb-2">
+              <button type="button" onClick={() => setForm({ ...form, favorite: !form.favorite })} className={`text-sm flex items-center ${form.favorite ? 'text-yellow-500' : 'text-[var(--text-muted)]'}`}>
+                <Star size={16} className={`mr-1 ${form.favorite ? 'fill-current' : ''}`} /> {t('favorites')}
+              </button>
+              <div className="flex items-center space-x-2">
+                <button
+                  type="button"
+                  onClick={handleSmartFill}
+                  disabled={isGeneratingInfo || (!form.title && !form.url)}
+                  className="flex items-center text-xs font-medium px-2 py-1 rounded bg-gradient-to-r from-purple-500/10 to-pink-500/10 text-purple-500 hover:from-purple-500/20 hover:to-pink-500/20 border border-purple-500/30 transition-all disabled:opacity-50"
+                >
+                  {isGeneratingInfo ? <Loader2 size={12} className="animate-spin mr-1" /> : <Sparkles size={12} className="mr-1" />}
+                  {t('smartFill')}
+                </button>
+                <select value={form.category} onChange={e => setForm({ ...form, category: e.target.value })} className="bg-transparent text-sm text-[var(--text)] border border-[var(--border)] rounded-lg p-1 outline-none">
+                  {categoryOptions.map(c => <option key={c} value={c}>{c}</option>)}
+                </select>
+              </div>
+            </div>
+
+            {aiFallbackNotice && (
+              <div className="rounded-xl border border-amber-500/30 bg-amber-500/8 px-3 py-2 text-xs text-amber-200/90 flex items-center gap-2">
+                <AlertTriangle size={14} className="shrink-0" />
+                <span>{aiFallbackNotice}</span>
+              </div>
             )}
-          </div>
 
-          <Input label={t('notes')} value={form.notes} onChange={e => setForm({...form, notes: e.target.value})} />
+            <Input label={t('serviceName')} value={form.title} onChange={e => setForm({ ...form, title: e.target.value })} required />
+            <Input label={t('url')} value={form.url} onChange={e => setForm({ ...form, url: e.target.value })} placeholder="https://" />
+            <Input label={t('username')} value={form.username} onChange={e => setForm({ ...form, username: e.target.value })} />
 
-          <div className="flex space-x-3 pt-4">
-            {editingItem && <Button type="button" variant="danger" icon={Trash} onClick={() => handleDelete(editingItem.id)} className="px-3" />}
-            <Button type="button" variant="secondary" onClick={() => setIsModalOpen(false)} className="flex-1">{t('cancel')}</Button>
-            <Button type="submit" className="flex-1">{t('save')}</Button>
-          </div>
-        </form>
-      </Modal>
+            <div className="relative">
+              <Input label={t('password')} type={showPwdInForm ? 'text' : 'password'} value={form.password} onChange={e => setForm({ ...form, password: e.target.value })} rightIcon={showPwdInForm ? <EyeOff size={18} /> : <Eye size={18} />} onRightIconClick={() => setShowPwdInForm(!showPwdInForm)} required />
+              {form.password && (
+                <div className="absolute top-1 right-1 flex items-center space-x-1">
+                  <div className={`h-1.5 w-10 rounded-full ${checkPasswordStrength(form.password).color}`}></div>
+                </div>
+              )}
+            </div>
 
-      <Modal isOpen={isCatModalOpen} onClose={() => setIsCatModalOpen(false)} title={editingCategory ? t('editCategory') : t('newCategory')}>
-        <form onSubmit={handleAddCategory} className="space-y-4">
-          <Input label={t('categoryName')} value={newCatName} onChange={e => setNewCatName(e.target.value)} required autoFocus />
-          <p className="text-xs text-[var(--text-muted)]">
-            A cor desta pasta é atribuída automaticamente e não se repete.
-          </p>
-          <div className="flex space-x-3 pt-4">
-            <Button type="button" variant="secondary" onClick={() => setIsCatModalOpen(false)} className="flex-1">{t('cancel')}</Button>
-            <Button type="submit" className="flex-1">{t('save')}</Button>
-          </div>
-        </form>
-      </Modal>
-    </div>
+            <Input label={t('notes')} value={form.notes} onChange={e => setForm({ ...form, notes: e.target.value })} />
+
+            <div className="flex space-x-3 pt-4">
+              {editingItem && <Button type="button" variant="danger" icon={Trash} onClick={() => handleDelete(editingItem.id)} className="px-3" />}
+              <Button type="button" variant="secondary" onClick={() => setIsModalOpen(false)} className="flex-1">{t('cancel')}</Button>
+              <Button type="submit" className="flex-1">{t('save')}</Button>
+            </div>
+          </form>
+        </Modal>
+
+        <Modal isOpen={isCatModalOpen} onClose={() => setIsCatModalOpen(false)} title={editingCategory ? t('editCategory') : t('newCategory')}>
+          <form onSubmit={handleAddCategory} className="space-y-4">
+            <Input label={t('categoryName')} value={newCatName} onChange={e => setNewCatName(e.target.value)} required autoFocus />
+            <p className="text-xs text-[var(--text-muted)]">
+              A cor desta pasta é atribuída automaticamente e não se repete.
+            </p>
+            <div className="flex space-x-3 pt-4">
+              <Button type="button" variant="secondary" onClick={() => setIsCatModalOpen(false)} className="flex-1">{t('cancel')}</Button>
+              <Button type="submit" className="flex-1">{t('save')}</Button>
+            </div>
+          </form>
+        </Modal>
+      </div>
     </div>
   );
 };
@@ -3178,7 +3179,6 @@ const CardManager = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingItem, setEditingItem] = useState(null);
   const globalTerms = useMemo(() => splitSearchTerms(globalSearch), [globalSearch]);
-  const activeCards = useMemo(() => cards.filter((item) => !isTrashedVaultEntry(item)), [cards]);
 
   const [form, setForm] = useState({ name: '', number: '', holder: '', expiry: '', cvv: '', pin: '', color: 'from-blue-600 to-blue-900' });
 
@@ -3201,8 +3201,10 @@ const CardManager = () => {
   };
 
   const handleDelete = (id) => {
-    if(window.confirm(t('confirmDelete'))) { setCards(prev => prev.map(c => (c.id === id ? { ...c, deletedAt: Date.now() } : c))); setIsModalOpen(false); }
+    if (window.confirm(t('confirmDelete'))) { setCards(prev => prev.map(c => c.id === id ? { ...c, deletedAt: Date.now() } : c)); setIsModalOpen(false); }
   };
+
+  const activeCards = useMemo(() => cards.filter((item) => !isTrashedVaultEntry(item)), [cards]);
 
   const filteredCards = useMemo(() => (
     activeCards.filter((card) => matchesSearchTerms(cardSearchFields(card), globalTerms))
@@ -3223,7 +3225,7 @@ const CardManager = () => {
       <div onClick={onClick} className={`relative h-48 rounded-2xl p-6 text-white shadow-xl cursor-pointer transform transition-transform hover:scale-[1.02] bg-gradient-to-br ${card.color} overflow-hidden group border border-white/10`}>
         <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full blur-2xl -mr-10 -mt-10"></div>
         <div className="absolute bottom-0 left-0 w-24 h-24 bg-black/20 rounded-full blur-xl -ml-5 -mb-5"></div>
-        
+
         <div className="relative z-10 flex flex-col justify-between h-full">
           <div className="flex justify-between items-start">
             <h3 className="font-semibold tracking-wider text-white/90">{card.name || 'My Card'}</h3>
@@ -3263,31 +3265,31 @@ const CardManager = () => {
       <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title={editingItem ? t('edit') : t('addCard')}>
         <div className="mb-6"><VisualCard card={form} /></div>
         <form onSubmit={handleSave} className="space-y-4">
-          <Input label={t('serviceName')} value={form.name} onChange={e => setForm({...form, name: e.target.value})} placeholder="e.g. Personal Visa" required />
-          <Input label={t('cardNumber')} value={formatCardNumber(form.number)} onChange={e => setForm({...form, number: e.target.value.replace(/\D/g, '')})} maxLength={19} required />
-          <Input label={t('cardHolder')} value={form.holder} onChange={e => setForm({...form, holder: e.target.value.toUpperCase()})} />
-          
+          <Input label={t('serviceName')} value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} placeholder="e.g. Personal Visa" required />
+          <Input label={t('cardNumber')} value={formatCardNumber(form.number)} onChange={e => setForm({ ...form, number: e.target.value.replace(/\D/g, '') })} maxLength={19} required />
+          <Input label={t('cardHolder')} value={form.holder} onChange={e => setForm({ ...form, holder: e.target.value.toUpperCase() })} />
+
           <div className="grid grid-cols-3 gap-4">
-            <Input label={t('expiry')} value={form.expiry} onChange={e => setForm({...form, expiry: e.target.value})} placeholder="MM/YY" />
-            <Input label={t('cvv')} type="password" value={form.cvv} onChange={e => setForm({...form, cvv: e.target.value.replace(/\D/g, '')})} maxLength={4} />
-            <Input label={t('pin')} type="password" value={form.pin} onChange={e => setForm({...form, pin: e.target.value.replace(/\D/g, '')})} maxLength={6} />
+            <Input label={t('expiry')} value={form.expiry} onChange={e => setForm({ ...form, expiry: e.target.value })} placeholder="MM/YY" />
+            <Input label={t('cvv')} type="password" value={form.cvv} onChange={e => setForm({ ...form, cvv: e.target.value.replace(/\D/g, '') })} maxLength={4} />
+            <Input label={t('pin')} type="password" value={form.pin} onChange={e => setForm({ ...form, pin: e.target.value.replace(/\D/g, '') })} maxLength={6} />
           </div>
 
           <div>
             <label className="text-sm font-medium text-[var(--text-muted)] mb-2 block">Card Style</label>
             <div className="flex space-x-2">
               {CARD_COLORS.map(color => (
-                <button key={color} type="button" onClick={() => setForm({...form, color})} className={`w-8 h-8 rounded-full bg-gradient-to-br ${color} ${form.color === color ? 'ring-2 ring-offset-2 ring-offset-[var(--surface)] ring-[var(--primary)]' : ''}`} />
+                <button key={color} type="button" onClick={() => setForm({ ...form, color })} className={`w-8 h-8 rounded-full bg-gradient-to-br ${color} ${form.color === color ? 'ring-2 ring-offset-2 ring-offset-[var(--surface)] ring-[var(--primary)]' : ''}`} />
               ))}
             </div>
           </div>
 
           {editingItem && (
-             <div className="bg-[var(--bg)] p-4 rounded-xl border border-[var(--border)] mt-4 space-y-2">
-               <div className="flex justify-between items-center"><span className="text-sm text-[var(--text-muted)]">{t('cardNumber')}</span> <SecretText text={editingItem.number} mask="•••• •••• •••• ••••" /></div>
-               <div className="flex justify-between items-center"><span className="text-sm text-[var(--text-muted)]">{t('cvv')}</span> <SecretText text={editingItem.cvv} mask="•••" /></div>
-               <div className="flex justify-between items-center"><span className="text-sm text-[var(--text-muted)]">{t('pin')}</span> <SecretText text={editingItem.pin} mask="••••" /></div>
-             </div>
+            <div className="bg-[var(--bg)] p-4 rounded-xl border border-[var(--border)] mt-4 space-y-2">
+              <div className="flex justify-between items-center"><span className="text-sm text-[var(--text-muted)]">{t('cardNumber')}</span> <SecretText text={editingItem.number} mask="•••• •••• •••• ••••" /></div>
+              <div className="flex justify-between items-center"><span className="text-sm text-[var(--text-muted)]">{t('cvv')}</span> <SecretText text={editingItem.cvv} mask="•••" /></div>
+              <div className="flex justify-between items-center"><span className="text-sm text-[var(--text-muted)]">{t('pin')}</span> <SecretText text={editingItem.pin} mask="••••" /></div>
+            </div>
           )}
 
           <div className="flex space-x-3 pt-4">
@@ -3371,8 +3373,8 @@ const GlobalQuickCreateModals = () => {
       <Modal isOpen={quickCreate === 'password'} onClose={() => setQuickCreate(null)} title={t('addPassword')}>
         <form onSubmit={handleSavePassword} className="space-y-4">
           <div className="flex items-center justify-center mb-4">
-            <img src={passwordPreview} alt="" className="w-16 h-16 rounded-2xl bg-[var(--bg)] p-2 border border-[var(--border)]" onError={(e) => { e.target.style.display='none'; e.target.nextSibling.style.display='flex'; }} />
-            <div className="w-16 h-16 rounded-2xl bg-[var(--primary)]/20 text-[var(--primary)] hidden items-center justify-center font-bold text-2xl border border-[var(--border)]">{passwordForm.title ? passwordForm.title.charAt(0) : <Globe/>}</div>
+            <img src={passwordPreview} alt="" className="w-16 h-16 rounded-2xl bg-[var(--bg)] p-2 border border-[var(--border)]" onError={(e) => { e.target.style.display = 'none'; e.target.nextSibling.style.display = 'flex'; }} />
+            <div className="w-16 h-16 rounded-2xl bg-[var(--primary)]/20 text-[var(--primary)] hidden items-center justify-center font-bold text-2xl border border-[var(--border)]">{passwordForm.title ? passwordForm.title.charAt(0) : <Globe />}</div>
           </div>
 
           <div className="flex items-center justify-end">
@@ -3382,7 +3384,7 @@ const GlobalQuickCreateModals = () => {
               disabled={isGeneratingInfo || (!passwordForm.title && !passwordForm.url)}
               className="flex items-center text-xs font-medium px-2 py-1 rounded bg-gradient-to-r from-purple-500/10 to-pink-500/10 text-purple-500 hover:from-purple-500/20 hover:to-pink-500/20 border border-purple-500/30 transition-all disabled:opacity-50"
             >
-              {isGeneratingInfo ? <Loader2 size={12} className="animate-spin mr-1"/> : <Sparkles size={12} className="mr-1"/>}
+              {isGeneratingInfo ? <Loader2 size={12} className="animate-spin mr-1" /> : <Sparkles size={12} className="mr-1" />}
               {t('smartFill')}
             </button>
           </div>
@@ -3394,17 +3396,17 @@ const GlobalQuickCreateModals = () => {
             </div>
           )}
 
-          <Input label={t('serviceName')} value={passwordForm.title} onChange={e => setPasswordForm({...passwordForm, title: e.target.value})} required />
-          <Input label={t('url')} value={passwordForm.url} onChange={e => setPasswordForm({...passwordForm, url: e.target.value})} placeholder="https://" />
-          <Input label={t('username')} value={passwordForm.username} onChange={e => setPasswordForm({...passwordForm, username: e.target.value})} />
-          <Input label={t('password')} type="password" value={passwordForm.password} onChange={e => setPasswordForm({...passwordForm, password: e.target.value})} required />
-          <Input label={t('notes')} value={passwordForm.notes} onChange={e => setPasswordForm({...passwordForm, notes: e.target.value})} />
+          <Input label={t('serviceName')} value={passwordForm.title} onChange={e => setPasswordForm({ ...passwordForm, title: e.target.value })} required />
+          <Input label={t('url')} value={passwordForm.url} onChange={e => setPasswordForm({ ...passwordForm, url: e.target.value })} placeholder="https://" />
+          <Input label={t('username')} value={passwordForm.username} onChange={e => setPasswordForm({ ...passwordForm, username: e.target.value })} />
+          <Input label={t('password')} type="password" value={passwordForm.password} onChange={e => setPasswordForm({ ...passwordForm, password: e.target.value })} required />
+          <Input label={t('notes')} value={passwordForm.notes} onChange={e => setPasswordForm({ ...passwordForm, notes: e.target.value })} />
           <div>
             <label className="text-sm font-medium text-[var(--text-muted)] mb-2 block">{t('category')}</label>
-            <select value={passwordForm.category} onChange={e => setPasswordForm({...passwordForm, category: e.target.value})} className="w-full bg-transparent text-sm text-[var(--text)] border border-[var(--border)] rounded-lg p-2 outline-none">
-                {sortCategoriesForDisplay(categories).map(cat => <option key={cat.name} value={cat.name}>{cat.name}</option>)}
-              </select>
-            </div>
+            <select value={passwordForm.category} onChange={e => setPasswordForm({ ...passwordForm, category: e.target.value })} className="w-full bg-transparent text-sm text-[var(--text)] border border-[var(--border)] rounded-lg p-2 outline-none">
+              {sortCategoriesForDisplay(categories).map(cat => <option key={cat.name} value={cat.name}>{cat.name}</option>)}
+            </select>
+          </div>
 
           <div className="flex space-x-3 pt-4">
             <Button type="button" variant="secondary" onClick={() => setQuickCreate(null)} className="flex-1">{t('cancel')}</Button>
@@ -3436,20 +3438,20 @@ const GlobalQuickCreateModals = () => {
         </div>
 
         <form onSubmit={handleSaveCard} className="space-y-4">
-          <Input label={t('serviceName')} value={cardForm.name} onChange={e => setCardForm({...cardForm, name: e.target.value})} placeholder="e.g. Personal Visa" required />
-          <Input label={t('cardNumber')} value={formatCardNumber(cardForm.number)} onChange={e => setCardForm({...cardForm, number: e.target.value.replace(/\D/g, '')})} maxLength={19} required />
-          <Input label={t('cardHolder')} value={cardForm.holder} onChange={e => setCardForm({...cardForm, holder: e.target.value.toUpperCase()})} />
+          <Input label={t('serviceName')} value={cardForm.name} onChange={e => setCardForm({ ...cardForm, name: e.target.value })} placeholder="e.g. Personal Visa" required />
+          <Input label={t('cardNumber')} value={formatCardNumber(cardForm.number)} onChange={e => setCardForm({ ...cardForm, number: e.target.value.replace(/\D/g, '') })} maxLength={19} required />
+          <Input label={t('cardHolder')} value={cardForm.holder} onChange={e => setCardForm({ ...cardForm, holder: e.target.value.toUpperCase() })} />
           <div className="grid grid-cols-3 gap-4">
-            <Input label={t('expiry')} value={cardForm.expiry} onChange={e => setCardForm({...cardForm, expiry: e.target.value})} placeholder="MM/YY" />
-            <Input label={t('cvv')} type="password" value={cardForm.cvv} onChange={e => setCardForm({...cardForm, cvv: e.target.value.replace(/\D/g, '')})} maxLength={4} />
-            <Input label={t('pin')} type="password" value={cardForm.pin} onChange={e => setCardForm({...cardForm, pin: e.target.value.replace(/\D/g, '')})} maxLength={6} />
+            <Input label={t('expiry')} value={cardForm.expiry} onChange={e => setCardForm({ ...cardForm, expiry: e.target.value })} placeholder="MM/YY" />
+            <Input label={t('cvv')} type="password" value={cardForm.cvv} onChange={e => setCardForm({ ...cardForm, cvv: e.target.value.replace(/\D/g, '') })} maxLength={4} />
+            <Input label={t('pin')} type="password" value={cardForm.pin} onChange={e => setCardForm({ ...cardForm, pin: e.target.value.replace(/\D/g, '') })} maxLength={6} />
           </div>
 
           <div>
             <label className="text-sm font-medium text-[var(--text-muted)] mb-2 block">Card Style</label>
             <div className="flex space-x-2">
               {CARD_COLORS.map(color => (
-                <button key={color} type="button" onClick={() => setCardForm({...cardForm, color})} className={`w-8 h-8 rounded-full bg-gradient-to-br ${color} ${cardForm.color === color ? 'ring-2 ring-offset-2 ring-offset-[var(--surface)] ring-[var(--primary)]' : ''}`} />
+                <button key={color} type="button" onClick={() => setCardForm({ ...cardForm, color })} className={`w-8 h-8 rounded-full bg-gradient-to-br ${color} ${cardForm.color === color ? 'ring-2 ring-offset-2 ring-offset-[var(--surface)] ring-[var(--primary)]' : ''}`} />
               ))}
             </div>
           </div>
@@ -3515,23 +3517,23 @@ const GlobalQuickEditModals = () => {
         {passwordForm && (
           <form onSubmit={handleSavePassword} className="space-y-4">
             <div className="flex items-center justify-center mb-4">
-              <img src={passwordPreview} alt="" className="w-16 h-16 rounded-2xl bg-[var(--bg)] p-2 border border-[var(--border)]" onError={(e) => { e.target.style.display='none'; e.target.nextSibling.style.display='flex'; }} />
-              <div className="w-16 h-16 rounded-2xl bg-[var(--primary)]/20 text-[var(--primary)] hidden items-center justify-center font-bold text-2xl border border-[var(--border)]">{passwordForm.title ? passwordForm.title.charAt(0) : <Globe/>}</div>
+              <img src={passwordPreview} alt="" className="w-16 h-16 rounded-2xl bg-[var(--bg)] p-2 border border-[var(--border)]" onError={(e) => { e.target.style.display = 'none'; e.target.nextSibling.style.display = 'flex'; }} />
+              <div className="w-16 h-16 rounded-2xl bg-[var(--primary)]/20 text-[var(--primary)] hidden items-center justify-center font-bold text-2xl border border-[var(--border)]">{passwordForm.title ? passwordForm.title.charAt(0) : <Globe />}</div>
             </div>
 
-            <Input label={t('serviceName')} value={passwordForm.title} onChange={e => setPasswordForm({...passwordForm, title: e.target.value})} required />
-            <Input label={t('url')} value={passwordForm.url} onChange={e => setPasswordForm({...passwordForm, url: e.target.value})} placeholder="https://" />
-            <Input label={t('username')} value={passwordForm.username} onChange={e => setPasswordForm({...passwordForm, username: e.target.value})} />
-            <Input label={t('password')} type="password" value={passwordForm.password} onChange={e => setPasswordForm({...passwordForm, password: e.target.value})} required />
-            <Input label={t('notes')} value={passwordForm.notes} onChange={e => setPasswordForm({...passwordForm, notes: e.target.value})} />
+            <Input label={t('serviceName')} value={passwordForm.title} onChange={e => setPasswordForm({ ...passwordForm, title: e.target.value })} required />
+            <Input label={t('url')} value={passwordForm.url} onChange={e => setPasswordForm({ ...passwordForm, url: e.target.value })} placeholder="https://" />
+            <Input label={t('username')} value={passwordForm.username} onChange={e => setPasswordForm({ ...passwordForm, username: e.target.value })} />
+            <Input label={t('password')} type="password" value={passwordForm.password} onChange={e => setPasswordForm({ ...passwordForm, password: e.target.value })} required />
+            <Input label={t('notes')} value={passwordForm.notes} onChange={e => setPasswordForm({ ...passwordForm, notes: e.target.value })} />
             <div>
-            <label className="text-sm font-medium text-[var(--text-muted)] mb-2 block">{t('category')}</label>
-            <select value={passwordForm.category} onChange={e => setPasswordForm({...passwordForm, category: e.target.value})} className="w-full bg-transparent text-sm text-[var(--text)] border border-[var(--border)] rounded-lg p-2 outline-none">
+              <label className="text-sm font-medium text-[var(--text-muted)] mb-2 block">{t('category')}</label>
+              <select value={passwordForm.category} onChange={e => setPasswordForm({ ...passwordForm, category: e.target.value })} className="w-full bg-transparent text-sm text-[var(--text)] border border-[var(--border)] rounded-lg p-2 outline-none">
                 {sortCategoriesForDisplay(categories).map(cat => <option key={cat.name} value={cat.name}>{cat.name}</option>)}
               </select>
             </div>
             <div className="flex items-center justify-between">
-              <button type="button" onClick={() => setPasswordForm({...passwordForm, favorite: !passwordForm.favorite})} className={`text-sm flex items-center ${passwordForm.favorite ? 'text-yellow-500' : 'text-[var(--text-muted)]'}`}>
+              <button type="button" onClick={() => setPasswordForm({ ...passwordForm, favorite: !passwordForm.favorite })} className={`text-sm flex items-center ${passwordForm.favorite ? 'text-yellow-500' : 'text-[var(--text-muted)]'}`}>
                 <Star size={16} className={`mr-1 ${passwordForm.favorite ? 'fill-current' : ''}`} /> {t('favorites')}
               </button>
             </div>
@@ -3569,20 +3571,20 @@ const GlobalQuickEditModals = () => {
             </div>
 
             <form onSubmit={handleSaveCard} className="space-y-4">
-              <Input label={t('serviceName')} value={cardForm.name} onChange={e => setCardForm({...cardForm, name: e.target.value})} placeholder="e.g. Personal Visa" required />
-              <Input label={t('cardNumber')} value={formatCardNumber(cardForm.number)} onChange={e => setCardForm({...cardForm, number: e.target.value.replace(/\D/g, '')})} maxLength={19} required />
-              <Input label={t('cardHolder')} value={cardForm.holder} onChange={e => setCardForm({...cardForm, holder: e.target.value.toUpperCase()})} />
+              <Input label={t('serviceName')} value={cardForm.name} onChange={e => setCardForm({ ...cardForm, name: e.target.value })} placeholder="e.g. Personal Visa" required />
+              <Input label={t('cardNumber')} value={formatCardNumber(cardForm.number)} onChange={e => setCardForm({ ...cardForm, number: e.target.value.replace(/\D/g, '') })} maxLength={19} required />
+              <Input label={t('cardHolder')} value={cardForm.holder} onChange={e => setCardForm({ ...cardForm, holder: e.target.value.toUpperCase() })} />
               <div className="grid grid-cols-3 gap-4">
-                <Input label={t('expiry')} value={cardForm.expiry} onChange={e => setCardForm({...cardForm, expiry: e.target.value})} placeholder="MM/YY" />
-                <Input label={t('cvv')} type="password" value={cardForm.cvv} onChange={e => setCardForm({...cardForm, cvv: e.target.value.replace(/\D/g, '')})} maxLength={4} />
-                <Input label={t('pin')} type="password" value={cardForm.pin} onChange={e => setCardForm({...cardForm, pin: e.target.value.replace(/\D/g, '')})} maxLength={6} />
+                <Input label={t('expiry')} value={cardForm.expiry} onChange={e => setCardForm({ ...cardForm, expiry: e.target.value })} placeholder="MM/YY" />
+                <Input label={t('cvv')} type="password" value={cardForm.cvv} onChange={e => setCardForm({ ...cardForm, cvv: e.target.value.replace(/\D/g, '') })} maxLength={4} />
+                <Input label={t('pin')} type="password" value={cardForm.pin} onChange={e => setCardForm({ ...cardForm, pin: e.target.value.replace(/\D/g, '') })} maxLength={6} />
               </div>
 
               <div>
                 <label className="text-sm font-medium text-[var(--text-muted)] mb-2 block">Card Style</label>
                 <div className="flex space-x-2">
                   {CARD_COLORS.map(color => (
-                    <button key={color} type="button" onClick={() => setCardForm({...cardForm, color})} className={`w-8 h-8 rounded-full bg-gradient-to-br ${color} ${cardForm.color === color ? 'ring-2 ring-offset-2 ring-offset-[var(--surface)] ring-[var(--primary)]' : ''}`} />
+                    <button key={color} type="button" onClick={() => setCardForm({ ...cardForm, color })} className={`w-8 h-8 rounded-full bg-gradient-to-br ${color} ${cardForm.color === color ? 'ring-2 ring-offset-2 ring-offset-[var(--surface)] ring-[var(--primary)]' : ''}`} />
                   ))}
                 </div>
               </div>
@@ -3604,7 +3606,7 @@ const PasswordGenerator = () => {
   const [length, setLength] = useState(16);
   const [opts, setOpts] = useState({ upper: true, lower: true, numbers: true, symbols: true });
   const [generated, setGenerated] = useState('');
-  
+
   const [themePrompt, setThemePrompt] = useState('');
   const [isGeneratingAI, setIsGeneratingAI] = useState(false);
   const [aiFallbackNotice, setAiFallbackNotice] = useState('');
@@ -3615,9 +3617,9 @@ const PasswordGenerator = () => {
     if (opts.lower) chars += 'abcdefghijklmnopqrstuvwxyz';
     if (opts.numbers) chars += '0123456789';
     if (opts.symbols) chars += '!@#$%^&*()_+~`|}{[]:;?><,./-=';
-    
+
     if (chars === '') { setGenerated(''); return; }
-    
+
     let pwd = '';
     for (let i = 0; i < length; i++) {
       pwd += chars.charAt(Math.floor(Math.random() * chars.length));
@@ -3667,7 +3669,7 @@ const PasswordGenerator = () => {
             {generated || '---'}
           </div>
           <div className="absolute -bottom-1 left-0 w-full h-1 bg-[var(--surface-hover)] rounded-full overflow-hidden">
-             <div className={`h-full transition-all duration-300 ${strength.color}`} style={{ width: `${(strength.score / 5) * 100}%` }}></div>
+            <div className={`h-full transition-all duration-300 ${strength.color}`} style={{ width: `${(strength.score / 5) * 100}%` }}></div>
           </div>
         </div>
 
@@ -3679,24 +3681,24 @@ const PasswordGenerator = () => {
         {/* AI Generator Section */}
         <div className="mb-8 p-4 rounded-xl border border-purple-500/30 bg-gradient-to-br from-purple-500/5 to-pink-500/5">
           <h3 className="text-sm font-semibold flex items-center mb-3 text-purple-500">
-             <Sparkles size={16} className="mr-2" /> {t('smartPassphrase')}
+            <Sparkles size={16} className="mr-2" /> {t('smartPassphrase')}
           </h3>
           <div className="flex space-x-2">
-            <input 
-              type="text" 
+            <input
+              type="text"
               placeholder={t('themePrompt')}
               value={themePrompt}
               onChange={e => setThemePrompt(e.target.value)}
               className="flex-1 bg-[var(--surface)] text-[var(--text)] border border-[var(--border)] rounded-lg py-2 px-3 focus:outline-none focus:ring-2 focus:ring-purple-500 text-sm"
               onKeyDown={(e) => e.key === 'Enter' && handleSmartPassphrase()}
             />
-            <Button 
-              onClick={handleSmartPassphrase} 
+            <Button
+              onClick={handleSmartPassphrase}
               disabled={isGeneratingAI || !themePrompt}
               className="bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-500 hover:to-pink-500 border-none px-4 text-white shadow-lg shadow-purple-500/20"
-              >
-                {isGeneratingAI ? <Loader2 size={18} className="animate-spin" /> : <Sparkles size={18} />}
-              </Button>
+            >
+              {isGeneratingAI ? <Loader2 size={18} className="animate-spin" /> : <Sparkles size={18} />}
+            </Button>
           </div>
           {aiFallbackNotice && (
             <div className="mt-3 rounded-xl border border-amber-500/30 bg-amber-500/8 px-3 py-2 text-xs text-amber-200/90 flex items-center gap-2">
@@ -3771,93 +3773,55 @@ const SettingsScreen = () => {
   const [bitwardenDuplicateMode, setBitwardenDuplicateMode] = useState('ignore');
   const identifier = getPersistedAuthIdentifier() || '';
   const currentVaultKeyWrapMaster = vaultKeyWrapMaster || null;
+
   const activePasswords = useMemo(() => passwords.filter((item) => !isTrashedVaultEntry(item)), [passwords]);
-  const trashItems = useMemo(() => {
-    const passwordTrash = passwords
-      .filter((item) => isTrashedVaultEntry(item) && !isExpiredTrashEntry(item))
-      .map((item) => ({ ...item, kind: 'password' }));
-    const cardTrash = cards
-      .filter((item) => isTrashedVaultEntry(item) && !isExpiredTrashEntry(item))
-      .map((item) => ({ ...item, kind: 'card' }));
-    return [...passwordTrash, ...cardTrash].sort((a, b) => Number(b.deletedAt || 0) - Number(a.deletedAt || 0));
-  }, [passwords, cards]);
+  const trashedPasswords = useMemo(() => passwords.filter((item) => isTrashedVaultEntry(item)), [passwords]);
+  const trashedCards = useMemo(() => cards.filter((item) => isTrashedVaultEntry(item)), [cards]);
 
-  const persistVaultChanges = async (nextPasswords, nextCards, nextCategories = categories) => {
-    return syncVault({
-      nextCategories,
-      nextPasswords,
-      nextCards,
-      currentUserId: userId || 'admin_vault',
-    });
-  };
-
-  const handleRestoreTrashItem = async (item) => {
-    const nextPasswords = item.kind === 'password'
-      ? passwords.map((entry) => (entry.id === item.id ? stripTrashMetadata(entry) : entry))
-      : passwords;
-    const nextCards = item.kind === 'card'
-      ? cards.map((entry) => (entry.id === item.id ? stripTrashMetadata(entry) : entry))
-      : cards;
-
-    setPasswords(nextPasswords);
-    setCards(nextCards);
-
+  const handleRestoreTrashItem = async (item, kind) => {
+    const nextItem = stripTrashMetadata(item);
+    let nextP = passwords;
+    let nextC = cards;
+    if (kind === 'password') { nextP = passwords.map(p => p.id === item.id ? nextItem : p); setPasswords(nextP); }
+    else { nextC = cards.map(c => c.id === item.id ? nextItem : c); setCards(nextC); }
     try {
-      await persistVaultChanges(nextPasswords, nextCards);
+      await syncVault({ nextPasswords: nextP, nextCards: nextC, nextCategories: categories });
       showToast(t('trashRestored'));
     } catch (err) {
       setPasswords(passwords);
       setCards(cards);
-      console.error(err);
       showToast(t('trashRestoreFailed'));
     }
   };
 
-  const handleDeleteTrashItem = async (item) => {
+  const handleDeleteForever = async (id, kind) => {
     if (!window.confirm(t('trashDeleteConfirm'))) return;
-
-    const nextPasswords = item.kind === 'password'
-      ? passwords.filter((entry) => entry.id !== item.id)
-      : passwords;
-    const nextCards = item.kind === 'card'
-      ? cards.filter((entry) => entry.id !== item.id)
-      : cards;
-
-    setPasswords(nextPasswords);
-    setCards(nextCards);
-
+    let nextP = passwords;
+    let nextC = cards;
+    if (kind === 'password') { nextP = passwords.filter(p => p.id !== id); setPasswords(nextP); }
+    else { nextC = cards.filter(c => c.id !== id); setCards(nextC); }
     try {
-      await persistVaultChanges(nextPasswords, nextCards);
+      await syncVault({ nextPasswords: nextP, nextCards: nextC, nextCategories: categories });
       showToast(t('trashDeletedForever'));
     } catch (err) {
       setPasswords(passwords);
       setCards(cards);
-      console.error(err);
       showToast(t('trashDeleteFailed'));
     }
   };
 
   const handleEmptyTrash = async () => {
-    if (!trashItems.length) {
-      showToast(t('trashEmptyState'));
-      return;
-    }
-
     if (!window.confirm(t('trashEmptyConfirm'))) return;
-
-    const nextPasswords = passwords.filter((item) => !isTrashedVaultEntry(item));
-    const nextCards = cards.filter((item) => !isTrashedVaultEntry(item));
-
-    setPasswords(nextPasswords);
-    setCards(nextCards);
-
+    const nextP = passwords.filter(p => !isTrashedVaultEntry(p));
+    const nextC = cards.filter(c => !isTrashedVaultEntry(c));
+    setPasswords(nextP);
+    setCards(nextC);
     try {
-      await persistVaultChanges(nextPasswords, nextCards);
+      await syncVault({ nextPasswords: nextP, nextCards: nextC, nextCategories: categories });
       showToast(t('trashEmptied'));
     } catch (err) {
       setPasswords(passwords);
       setCards(cards);
-      console.error(err);
       showToast(t('trashEmptyFailed'));
     }
   };
@@ -3967,7 +3931,7 @@ const SettingsScreen = () => {
             return;
           }
 
-          const duplicateIndex = nextPasswords.findIndex((item) => item.id === row.duplicateId && !isTrashedVaultEntry(item));
+          const duplicateIndex = nextPasswords.findIndex((item) => item.id === row.duplicateId);
           if (duplicateIndex === -1) {
             created += 1;
             nextPasswords.push({
@@ -4047,8 +4011,8 @@ const SettingsScreen = () => {
         exportedAt: new Date().toISOString(),
         vaultVersion,
         categories,
-        passwords: pruneExpiredTrashEntries(passwords),
-        cards: pruneExpiredTrashEntries(cards),
+        passwords,
+        cards,
       };
 
       const encrypted = await encryptBackupPayload(payload, backupPassword);
@@ -4091,8 +4055,8 @@ const SettingsScreen = () => {
       }
 
       const nextCategories = normalizeCategories(Array.isArray(payload.categories) ? payload.categories : DEFAULT_CATEGORIES);
-      const nextPasswords = pruneExpiredTrashEntries(Array.isArray(payload.passwords) ? payload.passwords : []);
-      const nextCards = pruneExpiredTrashEntries(Array.isArray(payload.cards) ? payload.cards : []);
+      const nextPasswords = Array.isArray(payload.passwords) ? payload.passwords : [];
+      const nextCards = Array.isArray(payload.cards) ? payload.cards : [];
       const nextVaultVersion = Number.isFinite(Number(payload.vaultVersion)) ? Number(payload.vaultVersion) : vaultVersion;
 
       setCategories(nextCategories);
@@ -4418,30 +4382,30 @@ const SettingsScreen = () => {
       <h1 className="text-2xl font-bold text-[var(--text)]">{t('settings')}</h1>
 
       <div className="space-y-4">
-        <h2 className="text-lg font-semibold text-[var(--text)] flex items-center"><Palette size={20} className="mr-2 text-[var(--primary)]"/> {t('theme')}</h2>
+        <h2 className="text-lg font-semibold text-[var(--text)] flex items-center"><Palette size={20} className="mr-2 text-[var(--primary)]" /> {t('theme')}</h2>
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3">
           {Object.entries(THEMES).map(([key, data]) => (
             <button key={key} onClick={() => setTheme(key)} className={`p-3 rounded-xl border-2 flex flex-col items-center space-y-2 transition-all ${theme === key ? 'border-[var(--primary)] bg-[var(--surface-hover)]' : 'border-[var(--border)] bg-[var(--surface)] hover:border-[var(--text-muted)]'}`}>
-               <div className="w-8 h-8 rounded-full border border-black/20 shadow-inner" style={{ backgroundColor: data.vars['--bg'], border: `2px solid ${data.vars['--primary']}` }}></div>
-               <span className="text-xs font-medium text-[var(--text)] text-center">{data.name}</span>
+              <div className="w-8 h-8 rounded-full border border-black/20 shadow-inner" style={{ backgroundColor: data.vars['--bg'], border: `2px solid ${data.vars['--primary']}` }}></div>
+              <span className="text-xs font-medium text-[var(--text)] text-center">{data.name}</span>
             </button>
           ))}
         </div>
       </div>
 
       <div className="space-y-4">
-        <h2 className="text-lg font-semibold text-[var(--text)] flex items-center"><Globe size={20} className="mr-2 text-[var(--primary)]"/> {t('language')}</h2>
+        <h2 className="text-lg font-semibold text-[var(--text)] flex items-center"><Globe size={20} className="mr-2 text-[var(--primary)]" /> {t('language')}</h2>
         <div className="grid grid-cols-3 gap-3">
           {['pt', 'en', 'es'].map(l => (
             <button key={l} onClick={() => setLang(l)} className={`py-2 px-4 rounded-xl border text-sm font-medium uppercase transition-all ${lang === l ? 'border-[var(--primary)] bg-[var(--primary)] text-white' : 'border-[var(--border)] bg-[var(--surface)] text-[var(--text)] hover:bg-[var(--surface-hover)]'}`}>
-               {l === 'pt' ? 'Português' : l === 'en' ? 'English' : 'Español'}
+              {l === 'pt' ? 'Português' : l === 'en' ? 'English' : 'Español'}
             </button>
           ))}
         </div>
       </div>
 
       <div className="space-y-4">
-        <h2 className="text-lg font-semibold text-[var(--text)] flex items-center"><Clock size={20} className="mr-2 text-[var(--primary)]"/> {t('timeout')}</h2>
+        <h2 className="text-lg font-semibold text-[var(--text)] flex items-center"><Clock size={20} className="mr-2 text-[var(--primary)]" /> {t('timeout')}</h2>
         <select value={timeoutMinutes} onChange={e => setTimeoutMinutes(Number(e.target.value))} className="w-full bg-[var(--surface)] text-[var(--text)] border border-[var(--border)] rounded-xl py-3 px-4 focus:outline-none focus:ring-2 focus:ring-[var(--primary)]">
           <option value={1}>1 min</option>
           <option value={5}>5 min</option>
@@ -4573,56 +4537,77 @@ const SettingsScreen = () => {
         <p className="mt-2 text-sm text-[var(--text-muted)]">
           {t('trashDescription')}
         </p>
-        <div className="mt-4 flex items-center justify-between rounded-2xl border border-[var(--border)] bg-[var(--surface)] px-4 py-3 text-sm">
-          <div>
-            <p className="font-semibold text-[var(--text)]">{trashItems.length} {t('items')}</p>
-            <p className="text-xs text-[var(--text-muted)]">{t('trashSection')}</p>
-          </div>
-          <Button
-            type="button"
-            variant="danger"
-            icon={Trash}
-            className="px-4 py-2"
-            onClick={handleEmptyTrash}
-            disabled={!trashItems.length}
-          >
-            {t('trashEmpty')}
-          </Button>
-        </div>
 
-        <div className="mt-4 space-y-3">
-          {trashItems.length === 0 ? (
-            <div className="rounded-2xl border border-dashed border-[var(--border)] px-4 py-6 text-center text-sm text-[var(--text-muted)]">
-              {t('trashEmptyState')}
+        <div className="mt-4">
+          <div className="flex items-center justify-between bg-[var(--surface)] p-4 rounded-xl border border-[var(--border)] shadow-sm mb-4">
+            <div>
+              <p className="text-sm font-semibold text-[var(--text)]">{trashedPasswords.length + trashedCards.length} {t('items')}</p>
+              <p className="text-xs text-[var(--text-muted)]">{t('trashSection')}</p>
             </div>
-          ) : (
-            trashItems.map((item) => (
-              <div key={`${item.kind}-${item.id}`} className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-4 shadow-sm">
-                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            {(trashedPasswords.length > 0 || trashedCards.length > 0) && (
+              <Button
+                variant="danger"
+                icon={Trash}
+                onClick={handleEmptyTrash}
+                className="bg-red-500/10 text-red-500 hover:bg-red-500/20 border-none"
+              >
+                {t('trashEmpty')}
+              </Button>
+            )}
+          </div>
+
+          {(trashedPasswords.length > 0 || trashedCards.length > 0) ? (
+            <div className="space-y-3">
+              {trashedPasswords.map(item => (
+                <div key={item.id} className="flex flex-col sm:flex-row sm:items-center justify-between p-3 bg-[var(--surface)] rounded-xl border border-[var(--border)] gap-3 shadow-sm">
                   <div className="min-w-0">
-                    <p className="truncate font-semibold text-[var(--text)]">
-                      {item.kind === 'password' ? (item.title || item.username || item.url || t('passwords')) : (item.name || t('cards'))}
-                    </p>
-                    <p className="truncate text-xs text-[var(--text-muted)]">
-                      {item.kind === 'password'
-                        ? [item.username, item.url].filter(Boolean).join(' • ')
-                        : [item.holder, item.number ? formatCardNumber(item.number) : ''].filter(Boolean).join(' • ')}
-                    </p>
+                    <p className="text-sm font-semibold text-[var(--text)] truncate">{item.title}</p>
+                    <p className="text-xs text-[var(--text-muted)] truncate">{item.username} · {item.url}</p>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <span className="rounded-full border border-[var(--border)] bg-[var(--bg)]/60 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-[var(--text-muted)]">
-                      {new Date(item.deletedAt || Date.now()).toLocaleDateString()}
+                  <div className="flex items-center gap-2 sm:gap-3 shrink-0">
+                    <span className="text-xs font-mono bg-[var(--bg)] px-2 py-1 rounded text-[var(--text-muted)]">
+                      {new Date(getDeletedAtValue(item)).toLocaleDateString()}
                     </span>
-                    <Button type="button" variant="secondary" className="px-3 py-2" onClick={() => handleRestoreTrashItem(item)}>
+                    <Button variant="secondary" onClick={() => handleRestoreTrashItem(item, 'password')} className="px-3 py-1.5 text-xs h-auto">
                       {t('trashRestore')}
                     </Button>
-                    <Button type="button" variant="danger" className="px-3 py-2" onClick={() => handleDeleteTrashItem(item)}>
+                    <button
+                      onClick={() => handleDeleteForever(item.id, 'password')}
+                      className="text-red-500 hover:text-red-400 text-xs font-medium px-2 py-1"
+                    >
                       {t('trashDeleteForever')}
-                    </Button>
+                    </button>
                   </div>
                 </div>
-              </div>
-            ))
+              ))}
+              {trashedCards.map(item => (
+                <div key={item.id} className="flex flex-col sm:flex-row sm:items-center justify-between p-3 bg-[var(--surface)] rounded-xl border border-[var(--border)] gap-3 shadow-sm">
+                  <div className="min-w-0">
+                    <p className="text-sm font-semibold text-[var(--text)] truncate">{item.name}</p>
+                    <p className="text-xs text-[var(--text-muted)] truncate">{item.holder} · •••• {item.number?.slice(-4)}</p>
+                  </div>
+                  <div className="flex items-center gap-2 sm:gap-3 shrink-0">
+                    <span className="text-xs font-mono bg-[var(--bg)] px-2 py-1 rounded text-[var(--text-muted)]">
+                      {new Date(getDeletedAtValue(item)).toLocaleDateString()}
+                    </span>
+                    <Button variant="secondary" onClick={() => handleRestoreTrashItem(item, 'card')} className="px-3 py-1.5 text-xs h-auto">
+                      {t('trashRestore')}
+                    </Button>
+                    <button
+                      onClick={() => handleDeleteForever(item.id, 'card')}
+                      className="text-red-500 hover:text-red-400 text-xs font-medium px-2 py-1"
+                    >
+                      {t('trashDeleteForever')}
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="text-center py-6 bg-[var(--surface)] rounded-xl border border-[var(--border)] shadow-sm">
+              <Trash size={24} className="mx-auto text-[var(--text-muted)] opacity-50 mb-2" />
+              <p className="text-sm text-[var(--text-muted)]">{t('trashEmptyState')}</p>
+            </div>
           )}
         </div>
       </div>
@@ -4967,10 +4952,10 @@ const MainLayout = () => {
           ))}
         </nav>
         <div className="p-4 border-t border-[var(--border)]">
-           <button onClick={handleLock} className="w-full flex items-center space-x-3 px-4 py-3 rounded-xl text-[var(--text-muted)] hover:bg-[var(--danger)]/10 hover:text-[var(--danger)] transition-all">
-              <LogOut size={20} />
-              <span className="font-medium">{t('logout')}</span>
-           </button>
+          <button onClick={handleLock} className="w-full flex items-center space-x-3 px-4 py-3 rounded-xl text-[var(--text-muted)] hover:bg-[var(--danger)]/10 hover:text-[var(--danger)] transition-all">
+            <LogOut size={20} />
+            <span className="font-medium">{t('logout')}</span>
+          </button>
         </div>
       </aside>
 
@@ -4982,7 +4967,7 @@ const MainLayout = () => {
             <Shield size={24} />
             <span className="text-lg font-bold text-[var(--text)]">PassVault</span>
           </div>
-          <button onClick={handleLock} className="text-[var(--text-muted)] p-2"><LogOut size={20}/></button>
+          <button onClick={handleLock} className="text-[var(--text-muted)] p-2"><LogOut size={20} /></button>
         </header>
 
         <div className="md:hidden px-4 pt-4">
