@@ -143,6 +143,20 @@ const TRANSLATIONS = {
     backupPasswordPlaceholder: 'Usa uma password forte',
     exportBackup: 'Exportar backup encriptado',
     restoreBackup: 'Restaurar backup',
+    trashSection: 'Caixote do Lixo',
+    trashDescription: 'Os itens apagados podem ser restaurados ou removidos definitivamente. Os itens com mais de 30 dias são limpos automaticamente.',
+    trashRestore: 'Restaurar',
+    trashDeleteForever: 'Apagar definitivamente',
+    trashEmpty: 'Esvaziar lixo',
+    trashEmptyState: 'O caixote do lixo está vazio.',
+    trashEmptyConfirm: 'Queres esvaziar todo o caixote do lixo?',
+    trashDeleteConfirm: 'Queres apagar definitivamente este item?',
+    trashRestored: 'Item restaurado.',
+    trashDeletedForever: 'Item apagado definitivamente.',
+    trashEmptied: 'Caixote do lixo esvaziado.',
+    trashRestoreFailed: 'Não foi possível restaurar o item.',
+    trashDeleteFailed: 'Não foi possível apagar o item.',
+    trashEmptyFailed: 'Não foi possível esvaziar o caixote do lixo.',
     bitwardenImportSection: 'Importar do Bitwarden',
     bitwardenImportDescription: 'Importa ficheiros CSV do Bitwarden para a categoria Other. Podes rever duplicados antes de gravar.',
     bitwardenImportSelect: 'Selecionar CSV do Bitwarden',
@@ -260,6 +274,20 @@ const TRANSLATIONS = {
     backupPasswordPlaceholder: 'Use a strong password',
     exportBackup: 'Export encrypted backup',
     restoreBackup: 'Restore backup',
+    trashSection: 'Trash',
+    trashDescription: 'Deleted items can be restored or removed permanently. Items older than 30 days are cleaned automatically.',
+    trashRestore: 'Restore',
+    trashDeleteForever: 'Delete forever',
+    trashEmpty: 'Empty trash',
+    trashEmptyState: 'Trash is empty.',
+    trashEmptyConfirm: 'Do you want to empty the trash?',
+    trashDeleteConfirm: 'Do you want to delete this item forever?',
+    trashRestored: 'Item restored.',
+    trashDeletedForever: 'Item deleted forever.',
+    trashEmptied: 'Trash emptied.',
+    trashRestoreFailed: 'Could not restore the item.',
+    trashDeleteFailed: 'Could not delete the item.',
+    trashEmptyFailed: 'Could not empty the trash.',
     bitwardenImportSection: 'Import from Bitwarden',
     bitwardenImportDescription: 'Import Bitwarden CSV files into the Other category. You can review duplicates before saving.',
     bitwardenImportSelect: 'Select Bitwarden CSV',
@@ -377,6 +405,20 @@ const TRANSLATIONS = {
     backupPasswordPlaceholder: 'Usa una contraseña fuerte',
     exportBackup: 'Exportar copia encriptada',
     restoreBackup: 'Restaurar copia',
+    trashSection: 'Papelera',
+    trashDescription: 'Los elementos eliminados se pueden restaurar o borrar permanentemente. Los elementos de más de 30 días se limpian automáticamente.',
+    trashRestore: 'Restaurar',
+    trashDeleteForever: 'Borrar definitivamente',
+    trashEmpty: 'Vaciar papelera',
+    trashEmptyState: 'La papelera está vacía.',
+    trashEmptyConfirm: '¿Quieres vaciar toda la papelera?',
+    trashDeleteConfirm: '¿Quieres borrar este elemento definitivamente?',
+    trashRestored: 'Elemento restaurado.',
+    trashDeletedForever: 'Elemento borrado definitivamente.',
+    trashEmptied: 'Papelera vaciada.',
+    trashRestoreFailed: 'No se pudo restaurar el elemento.',
+    trashDeleteFailed: 'No se pudo borrar el elemento.',
+    trashEmptyFailed: 'No se pudo vaciar la papelera.',
     bitwardenImportSection: 'Importar desde Bitwarden',
     bitwardenImportDescription: 'Importa archivos CSV de Bitwarden a la categoría Other. Puedes revisar duplicados antes de guardar.',
     bitwardenImportSelect: 'Seleccionar CSV de Bitwarden',
@@ -1061,6 +1103,16 @@ const buildPasswordDedupeKey = (item = {}) => {
   return [title, username, host || rawUrl].join('|');
 };
 
+const TRASH_RETENTION_MS = 30 * 24 * 60 * 60 * 1000;
+const getDeletedAtValue = (item = {}) => Number(item?.deletedAt || 0);
+const isTrashedVaultEntry = (item = {}) => getDeletedAtValue(item) > 0;
+const isExpiredTrashEntry = (item = {}) => isTrashedVaultEntry(item) && (Date.now() - getDeletedAtValue(item) > TRASH_RETENTION_MS);
+const pruneExpiredTrashEntries = (records = []) => (Array.isArray(records) ? records : []).filter((item) => !isExpiredTrashEntry(item));
+const stripTrashMetadata = (item = {}) => {
+  const { deletedAt, kind, ...rest } = item;
+  return rest;
+};
+
 const dedupePasswordsByCategory = (records = [], categoryName = 'Other') => {
   const seen = new Set();
   const removed = [];
@@ -1256,8 +1308,10 @@ const AppProvider = ({ children }) => {
   } = {}) => {
     if (PREVIEW_MODE || isLocked || !hash || !key) return { ok: false, skipped: true };
 
-    const encryptedPasswords = await encryptVaultArray(nextPasswords, key);
-    const encryptedCards = await encryptVaultArray(nextCards, key);
+    const cleanedPasswords = pruneExpiredTrashEntries(nextPasswords);
+    const cleanedCards = pruneExpiredTrashEntries(nextCards);
+    const encryptedPasswords = await encryptVaultArray(cleanedPasswords, key);
+    const encryptedCards = await encryptVaultArray(cleanedCards, key);
     const res = await fetch(`${API_URL}/sync`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
@@ -1494,7 +1548,7 @@ const getFavicon = (url) => {
   if (!url) return null;
   try {
     const domain = new URL(url.startsWith('http') ? url : `https://${url}`).hostname;
-    return `https://www.google.com/s2/favicons?domain=${domain}&sz=64`;
+    return `${API_URL}/favicon?domain=${encodeURIComponent(domain)}`;
   } catch { return null; }
 };
 
@@ -1809,8 +1863,8 @@ const AuthScreen = () => {
 
     const data = await res.json();
     const nextCategories = normalizeCategories((Array.isArray(data.categories) && data.categories.length > 0) ? data.categories : DEFAULT_CATEGORIES);
-    const nextPasswords = await decryptVaultArray(data.passwords || [], vaultKeyInstance);
-    const nextCards = await decryptVaultArray(data.cards || [], vaultKeyInstance);
+    const nextPasswords = pruneExpiredTrashEntries(await decryptVaultArray(data.passwords || [], vaultKeyInstance));
+    const nextCards = pruneExpiredTrashEntries(await decryptVaultArray(data.cards || [], vaultKeyInstance));
     const nextPasskeys = data.webauthnCredentials || [];
 
     setCategories(nextCategories);
@@ -1930,8 +1984,8 @@ const AuthScreen = () => {
       const data = await res.json();
       const verifiedUserId = data.userId || data.user?.id || null;
       const nextCategories = normalizeCategories((Array.isArray(data.categories) && data.categories.length > 0) ? data.categories : DEFAULT_CATEGORIES);
-      const nextPasswords = Array.isArray(data.passwords) ? data.passwords : [];
-      const nextCards = Array.isArray(data.cards) ? data.cards : [];
+      const nextPasswords = pruneExpiredTrashEntries(Array.isArray(data.passwords) ? data.passwords : []);
+      const nextCards = pruneExpiredTrashEntries(Array.isArray(data.cards) ? data.cards : []);
 
       setCategories(nextCategories);
       setPasswords(nextPasswords);
@@ -2085,8 +2139,8 @@ const AuthScreen = () => {
         }
 
         setCategories(normalizeCategories((Array.isArray(data.categories) && data.categories.length > 0) ? data.categories : DEFAULT_CATEGORIES));
-        setPasswords(data.passwords || []);
-        setCards(data.cards || []);
+        setPasswords(pruneExpiredTrashEntries(data.passwords || []));
+        setCards(pruneExpiredTrashEntries(data.cards || []));
         setMasterHash(migrationMaterial.verifier);
         setVaultSalt(migrationSalt);
         setVaultVersion(2);
@@ -2346,10 +2400,12 @@ const AuthScreen = () => {
 const Dashboard = () => {
   const { passwords, cards, setQuickEdit, setQuickCreate, t, globalSearch } = useContext(AppContext);
   const globalTerms = useMemo(() => splitSearchTerms(globalSearch), [globalSearch]);
+  const activePasswords = useMemo(() => passwords.filter((item) => !isTrashedVaultEntry(item)), [passwords]);
+  const activeCards = useMemo(() => cards.filter((item) => !isTrashedVaultEntry(item)), [cards]);
   
   const favorites = useMemo(() => (
-    passwords.filter((item) => item.favorite && matchesSearchTerms(passwordSearchFields(item), globalTerms))
-  ), [passwords, globalTerms]);
+    activePasswords.filter((item) => item.favorite && matchesSearchTerms(passwordSearchFields(item), globalTerms))
+  ), [activePasswords, globalTerms]);
 
   return (
     <div className="space-y-6 animate-in fade-in">
@@ -2360,7 +2416,7 @@ const Dashboard = () => {
         <div className="bg-[var(--surface)] p-4 rounded-2xl border border-[var(--border)] flex items-center justify-between shadow-sm">
           <div>
             <p className="text-[var(--text-muted)] text-sm font-medium">{t('totalPasswords')}</p>
-            <p className="text-3xl font-bold text-[var(--text)] mt-1">{passwords.length}</p>
+            <p className="text-3xl font-bold text-[var(--text)] mt-1">{activePasswords.length}</p>
           </div>
           <div className="w-12 h-12 rounded-full bg-[var(--primary)]/10 flex items-center justify-center text-[var(--primary)]">
             <Key size={24} />
@@ -2369,7 +2425,7 @@ const Dashboard = () => {
         <div className="bg-[var(--surface)] p-4 rounded-2xl border border-[var(--border)] flex items-center justify-between shadow-sm">
           <div>
             <p className="text-[var(--text-muted)] text-sm font-medium">{t('totalCards')}</p>
-            <p className="text-3xl font-bold text-[var(--text)] mt-1">{cards.length}</p>
+            <p className="text-3xl font-bold text-[var(--text)] mt-1">{activeCards.length}</p>
           </div>
           <div className="w-12 h-12 rounded-full bg-[var(--primary)]/10 flex items-center justify-center text-[var(--primary)]">
             <CreditCard size={24} />
@@ -2441,9 +2497,11 @@ const PasswordManager = () => {
   const [aiFallbackNotice, setAiFallbackNotice] = useState('');
   const globalTerms = useMemo(() => splitSearchTerms(globalSearch), [globalSearch]);
   const localTerms = useMemo(() => splitSearchTerms(search), [search]);
+  const activePasswords = useMemo(() => passwords.filter((item) => !isTrashedVaultEntry(item)), [passwords]);
+  const trashedPasswords = useMemo(() => passwords.filter((item) => isTrashedVaultEntry(item)), [passwords]);
   const bestGlobalMatch = useMemo(
-    () => findBestPasswordMatch(passwords, globalTerms, globalSearch),
-    [passwords, globalTerms, globalSearch]
+    () => findBestPasswordMatch(activePasswords, globalTerms, globalSearch),
+    [activePasswords, globalTerms, globalSearch]
   );
 
   const categoryOptions = useMemo(
@@ -2461,25 +2519,25 @@ const PasswordManager = () => {
 
   const selectedCategoryCount = useMemo(() => {
     if (!selectedCategory) return 0;
-    return passwords.filter((p) => p.category === selectedCategory && matchesSearchTerms(passwordSearchFields(p), globalTerms)).length;
-  }, [passwords, selectedCategory, globalTerms]);
+    return activePasswords.filter((p) => p.category === selectedCategory && matchesSearchTerms(passwordSearchFields(p), globalTerms)).length;
+  }, [activePasswords, selectedCategory, globalTerms]);
 
   const otherDuplicatesCount = useMemo(() => {
     if (selectedCategory !== 'Other') return 0;
-    const { removed } = dedupePasswordsByCategory(passwords, 'Other');
+    const { removed } = dedupePasswordsByCategory(activePasswords, 'Other');
     return removed.length;
-  }, [passwords, selectedCategory]);
+  }, [activePasswords, selectedCategory]);
 
   const categoryMatchesSearch = useCallback((categoryName) => {
     if (!globalTerms.length) return true;
     if (matchesSearchTerms([categoryName], globalTerms)) return true;
-    return passwords.some((item) => item.category === categoryName && matchesSearchTerms(passwordSearchFields(item), globalTerms));
-  }, [globalTerms, passwords]);
+    return activePasswords.some((item) => item.category === categoryName && matchesSearchTerms(passwordSearchFields(item), globalTerms));
+  }, [activePasswords, globalTerms]);
 
   const filtered = useMemo(() => {
     if (!selectedCategory) return [];
     const activeTerms = globalTerms.length ? globalTerms : localTerms;
-    return passwords.filter(p => {
+    return activePasswords.filter(p => {
       const searchMatch = matchesSearchTerms(passwordSearchFields(p), activeTerms);
       return searchMatch && p.category === selectedCategory;
     }).sort((a, b) => {
@@ -2487,7 +2545,7 @@ const PasswordManager = () => {
       const bLabel = (b.title || b.username || '').trim().toLocaleLowerCase();
       return aLabel.localeCompare(bLabel, undefined, { sensitivity: 'base' });
     });
-  }, [passwords, localTerms, globalTerms, selectedCategory]);
+  }, [activePasswords, localTerms, globalTerms, selectedCategory]);
 
   useEffect(() => {
     if (!globalTerms.length || !bestGlobalMatch) return;
@@ -2531,7 +2589,7 @@ const PasswordManager = () => {
   };
 
   const handleRemoveOtherDuplicates = async () => {
-    const { kept, removed } = dedupePasswordsByCategory(passwords, 'Other');
+    const { kept, removed } = dedupePasswordsByCategory(activePasswords, 'Other');
     if (!removed.length) {
       showToast(t('removeOtherDuplicatesNone'));
       return;
@@ -2539,7 +2597,7 @@ const PasswordManager = () => {
 
     if (!window.confirm(`${t('removeOtherDuplicatesConfirm')} ${removed.length} ${t('items')}.`)) return;
 
-    const nextPasswords = kept;
+    const nextPasswords = [...trashedPasswords, ...kept];
     setPasswords(nextPasswords);
     if (selectedCategory === 'Other') {
       setDetailItem(null);
@@ -2584,7 +2642,7 @@ const PasswordManager = () => {
 
   const handleDelete = (id) => {
     if(window.confirm(t('confirmDelete'))) {
-      setPasswords(prev => prev.filter(p => p.id !== id));
+      setPasswords(prev => prev.map((p) => (p.id === id ? { ...p, deletedAt: Date.now() } : p)));
       setIsModalOpen(false);
     }
   };
@@ -2726,7 +2784,7 @@ const PasswordManager = () => {
   };
 
   const getCatCount = (cat) => {
-    return passwords.filter((p) => p.category === cat && matchesSearchTerms(passwordSearchFields(p), globalTerms)).length;
+    return activePasswords.filter((p) => p.category === cat && matchesSearchTerms(passwordSearchFields(p), globalTerms)).length;
   };
 
   const orderedCategories = useMemo(() => sortCategoriesForDisplay(categories), [categories]);
@@ -3120,6 +3178,7 @@ const CardManager = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingItem, setEditingItem] = useState(null);
   const globalTerms = useMemo(() => splitSearchTerms(globalSearch), [globalSearch]);
+  const activeCards = useMemo(() => cards.filter((item) => !isTrashedVaultEntry(item)), [cards]);
 
   const [form, setForm] = useState({ name: '', number: '', holder: '', expiry: '', cvv: '', pin: '', color: 'from-blue-600 to-blue-900' });
 
@@ -3142,12 +3201,12 @@ const CardManager = () => {
   };
 
   const handleDelete = (id) => {
-    if(window.confirm(t('confirmDelete'))) { setCards(prev => prev.filter(c => c.id !== id)); setIsModalOpen(false); }
+    if(window.confirm(t('confirmDelete'))) { setCards(prev => prev.map(c => (c.id === id ? { ...c, deletedAt: Date.now() } : c))); setIsModalOpen(false); }
   };
 
   const filteredCards = useMemo(() => (
-    cards.filter((card) => matchesSearchTerms(cardSearchFields(card), globalTerms))
-  ), [cards, globalTerms]);
+    activeCards.filter((card) => matchesSearchTerms(cardSearchFields(card), globalTerms))
+  ), [activeCards, globalTerms]);
 
   useEffect(() => registerScreenBackHandler(() => {
     if (isModalOpen) {
@@ -3712,6 +3771,96 @@ const SettingsScreen = () => {
   const [bitwardenDuplicateMode, setBitwardenDuplicateMode] = useState('ignore');
   const identifier = getPersistedAuthIdentifier() || '';
   const currentVaultKeyWrapMaster = vaultKeyWrapMaster || null;
+  const activePasswords = useMemo(() => passwords.filter((item) => !isTrashedVaultEntry(item)), [passwords]);
+  const trashItems = useMemo(() => {
+    const passwordTrash = passwords
+      .filter((item) => isTrashedVaultEntry(item) && !isExpiredTrashEntry(item))
+      .map((item) => ({ ...item, kind: 'password' }));
+    const cardTrash = cards
+      .filter((item) => isTrashedVaultEntry(item) && !isExpiredTrashEntry(item))
+      .map((item) => ({ ...item, kind: 'card' }));
+    return [...passwordTrash, ...cardTrash].sort((a, b) => Number(b.deletedAt || 0) - Number(a.deletedAt || 0));
+  }, [passwords, cards]);
+
+  const persistVaultChanges = async (nextPasswords, nextCards, nextCategories = categories) => {
+    return syncVault({
+      nextCategories,
+      nextPasswords,
+      nextCards,
+      currentUserId: userId || 'admin_vault',
+    });
+  };
+
+  const handleRestoreTrashItem = async (item) => {
+    const nextPasswords = item.kind === 'password'
+      ? passwords.map((entry) => (entry.id === item.id ? stripTrashMetadata(entry) : entry))
+      : passwords;
+    const nextCards = item.kind === 'card'
+      ? cards.map((entry) => (entry.id === item.id ? stripTrashMetadata(entry) : entry))
+      : cards;
+
+    setPasswords(nextPasswords);
+    setCards(nextCards);
+
+    try {
+      await persistVaultChanges(nextPasswords, nextCards);
+      showToast(t('trashRestored'));
+    } catch (err) {
+      setPasswords(passwords);
+      setCards(cards);
+      console.error(err);
+      showToast(t('trashRestoreFailed'));
+    }
+  };
+
+  const handleDeleteTrashItem = async (item) => {
+    if (!window.confirm(t('trashDeleteConfirm'))) return;
+
+    const nextPasswords = item.kind === 'password'
+      ? passwords.filter((entry) => entry.id !== item.id)
+      : passwords;
+    const nextCards = item.kind === 'card'
+      ? cards.filter((entry) => entry.id !== item.id)
+      : cards;
+
+    setPasswords(nextPasswords);
+    setCards(nextCards);
+
+    try {
+      await persistVaultChanges(nextPasswords, nextCards);
+      showToast(t('trashDeletedForever'));
+    } catch (err) {
+      setPasswords(passwords);
+      setCards(cards);
+      console.error(err);
+      showToast(t('trashDeleteFailed'));
+    }
+  };
+
+  const handleEmptyTrash = async () => {
+    if (!trashItems.length) {
+      showToast(t('trashEmptyState'));
+      return;
+    }
+
+    if (!window.confirm(t('trashEmptyConfirm'))) return;
+
+    const nextPasswords = passwords.filter((item) => !isTrashedVaultEntry(item));
+    const nextCards = cards.filter((item) => !isTrashedVaultEntry(item));
+
+    setPasswords(nextPasswords);
+    setCards(nextCards);
+
+    try {
+      await persistVaultChanges(nextPasswords, nextCards);
+      showToast(t('trashEmptied'));
+    } catch (err) {
+      setPasswords(passwords);
+      setCards(cards);
+      console.error(err);
+      showToast(t('trashEmptyFailed'));
+    }
+  };
 
   const bitwardenImportSummary = useMemo(() => {
     const total = bitwardenImportRows.length;
@@ -3756,7 +3905,7 @@ const SettingsScreen = () => {
         const mapped = mapBitwardenRecordToPassword(record);
         if (!mapped) return;
 
-        const duplicateMatch = findPasswordImportMatch(mapped, passwords);
+        const duplicateMatch = findPasswordImportMatch(mapped, activePasswords);
         previewRows.push({
           ...mapped,
           id: `bw-${Date.now()}-${index}-${Math.random().toString(16).slice(2)}`,
@@ -3818,7 +3967,7 @@ const SettingsScreen = () => {
             return;
           }
 
-          const duplicateIndex = nextPasswords.findIndex((item) => item.id === row.duplicateId);
+          const duplicateIndex = nextPasswords.findIndex((item) => item.id === row.duplicateId && !isTrashedVaultEntry(item));
           if (duplicateIndex === -1) {
             created += 1;
             nextPasswords.push({
@@ -3898,8 +4047,8 @@ const SettingsScreen = () => {
         exportedAt: new Date().toISOString(),
         vaultVersion,
         categories,
-        passwords,
-        cards,
+        passwords: pruneExpiredTrashEntries(passwords),
+        cards: pruneExpiredTrashEntries(cards),
       };
 
       const encrypted = await encryptBackupPayload(payload, backupPassword);
@@ -3942,8 +4091,8 @@ const SettingsScreen = () => {
       }
 
       const nextCategories = normalizeCategories(Array.isArray(payload.categories) ? payload.categories : DEFAULT_CATEGORIES);
-      const nextPasswords = Array.isArray(payload.passwords) ? payload.passwords : [];
-      const nextCards = Array.isArray(payload.cards) ? payload.cards : [];
+      const nextPasswords = pruneExpiredTrashEntries(Array.isArray(payload.passwords) ? payload.passwords : []);
+      const nextCards = pruneExpiredTrashEntries(Array.isArray(payload.cards) ? payload.cards : []);
       const nextVaultVersion = Number.isFinite(Number(payload.vaultVersion)) ? Number(payload.vaultVersion) : vaultVersion;
 
       setCategories(nextCategories);
@@ -4413,6 +4562,68 @@ const SettingsScreen = () => {
             className="hidden"
             onChange={(e) => handleRestoreBackupFile(e.target.files?.[0])}
           />
+        </div>
+      </div>
+
+      <div className="pt-4 border-t border-[var(--border)]">
+        <h2 className="text-lg font-semibold text-[var(--text)] flex items-center">
+          <Trash size={20} className="mr-2 text-[var(--primary)]" />
+          {t('trashSection')}
+        </h2>
+        <p className="mt-2 text-sm text-[var(--text-muted)]">
+          {t('trashDescription')}
+        </p>
+        <div className="mt-4 flex items-center justify-between rounded-2xl border border-[var(--border)] bg-[var(--surface)] px-4 py-3 text-sm">
+          <div>
+            <p className="font-semibold text-[var(--text)]">{trashItems.length} {t('items')}</p>
+            <p className="text-xs text-[var(--text-muted)]">{t('trashSection')}</p>
+          </div>
+          <Button
+            type="button"
+            variant="danger"
+            icon={Trash}
+            className="px-4 py-2"
+            onClick={handleEmptyTrash}
+            disabled={!trashItems.length}
+          >
+            {t('trashEmpty')}
+          </Button>
+        </div>
+
+        <div className="mt-4 space-y-3">
+          {trashItems.length === 0 ? (
+            <div className="rounded-2xl border border-dashed border-[var(--border)] px-4 py-6 text-center text-sm text-[var(--text-muted)]">
+              {t('trashEmptyState')}
+            </div>
+          ) : (
+            trashItems.map((item) => (
+              <div key={`${item.kind}-${item.id}`} className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-4 shadow-sm">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="min-w-0">
+                    <p className="truncate font-semibold text-[var(--text)]">
+                      {item.kind === 'password' ? (item.title || item.username || item.url || t('passwords')) : (item.name || t('cards'))}
+                    </p>
+                    <p className="truncate text-xs text-[var(--text-muted)]">
+                      {item.kind === 'password'
+                        ? [item.username, item.url].filter(Boolean).join(' • ')
+                        : [item.holder, item.number ? formatCardNumber(item.number) : ''].filter(Boolean).join(' • ')}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="rounded-full border border-[var(--border)] bg-[var(--bg)]/60 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-[var(--text-muted)]">
+                      {new Date(item.deletedAt || Date.now()).toLocaleDateString()}
+                    </span>
+                    <Button type="button" variant="secondary" className="px-3 py-2" onClick={() => handleRestoreTrashItem(item)}>
+                      {t('trashRestore')}
+                    </Button>
+                    <Button type="button" variant="danger" className="px-3 py-2" onClick={() => handleDeleteTrashItem(item)}>
+                      {t('trashDeleteForever')}
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            ))
+          )}
         </div>
       </div>
 

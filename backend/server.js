@@ -17,6 +17,45 @@ app.use(cors());
 app.use(express.json({ limit: '10mb' }));
 app.use(express.static(path.join(__dirname, '../frontend/dist')));
 
+app.get('/api/favicon', async (req, res) => {
+    try {
+        const domain = normalizeFaviconDomain(req.query.domain || req.query.url || '');
+        if (!domain) {
+            return res.sendStatus(204);
+        }
+
+        const cached = getCachedFaviconUrl(domain);
+        if (cached) {
+            return res.redirect(302, cached);
+        }
+
+        const googleUrl = `https://www.google.com/s2/favicons?domain=${encodeURIComponent(domain)}&sz=128`;
+        const iconHorseUrl = `https://icon.horse/icon/${encodeURIComponent(domain)}`;
+
+        const googleProbe = await probeImageUrl(googleUrl).catch(() => null);
+        if (googleProbe && googleProbe.size !== 726) {
+            setCachedFaviconUrl(domain, googleUrl);
+            return res.redirect(302, googleUrl);
+        }
+
+        const horseProbe = await probeImageUrl(iconHorseUrl).catch(() => null);
+        if (horseProbe) {
+            setCachedFaviconUrl(domain, iconHorseUrl);
+            return res.redirect(302, iconHorseUrl);
+        }
+
+        if (googleProbe) {
+            setCachedFaviconUrl(domain, googleUrl);
+            return res.redirect(302, googleUrl);
+        }
+
+        return res.sendStatus(204);
+    } catch (error) {
+        console.error('Favicon probe failed:', error);
+        return res.sendStatus(204);
+    }
+});
+
 const pool = new Pool({
     connectionString: process.env.DATABASE_URL
 });
@@ -37,6 +76,8 @@ const SMTP_USER = process.env.SMTP_USER || '';
 const SMTP_PASSWORD = process.env.SMTP_PASSWORD || '';
 const REGISTRATION_CODE_TTL_MINUTES = Number(process.env.REGISTRATION_CODE_TTL_MINUTES || 15);
 const REGISTRATION_MAX_ATTEMPTS = Number(process.env.REGISTRATION_MAX_ATTEMPTS || 5);
+const FAVICON_CACHE_TTL_MS = 24 * 60 * 60 * 1000;
+const faviconCache = new Map();
 
 const pendingWebAuthn = {
     registration: null,
@@ -75,6 +116,50 @@ const normalizeJson = (value, fallback) => {
 };
 
 const normalizeEmail = (value = '') => String(value || '').trim().toLowerCase();
+const normalizeFaviconDomain = (value = '') => {
+    try {
+        const raw = String(value || '').trim();
+        if (!raw) return '';
+        const parsed = new URL(raw.startsWith('http') ? raw : `https://${raw}`);
+        return parsed.hostname.toLowerCase().replace(/^www\./, '');
+    } catch {
+        return '';
+    }
+};
+
+const getCachedFaviconUrl = (domain) => {
+    const cached = faviconCache.get(domain);
+    if (!cached) return null;
+    if (cached.expiresAt <= Date.now()) {
+        faviconCache.delete(domain);
+        return null;
+    }
+    return cached.url;
+};
+
+const setCachedFaviconUrl = (domain, url) => {
+    faviconCache.set(domain, {
+        url,
+        expiresAt: Date.now() + FAVICON_CACHE_TTL_MS,
+    });
+};
+
+const probeImageUrl = async (url) => {
+    const response = await fetch(url, {
+        redirect: 'follow',
+        headers: {
+            'User-Agent': 'Mozilla/5.0 (PassVault favicon probe)',
+            'Accept': 'image/avif,image/webp,image/apng,image/*,*/*;q=0.8',
+        },
+    });
+
+    if (!response.ok) return null;
+    const contentType = response.headers.get('content-type') || '';
+    if (!contentType.toLowerCase().startsWith('image/')) return null;
+
+    const buffer = Buffer.from(await response.arrayBuffer());
+    return buffer.length ? { url, size: buffer.length } : null;
+};
 
 const isValidEmail = (value = '') => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(value || '').trim());
 
