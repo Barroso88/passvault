@@ -2844,7 +2844,7 @@ const PasswordManager = () => {
                           setSelectedCategory(cat.name);
                         }
                       }}
-                      className="group flex w-full cursor-pointer items-center gap-1.5 px-0 py-2.5 text-left transition-colors hover:bg-white/[0.03] focus-visible:bg-white/[0.03] focus-visible:outline-none sm:gap-3 sm:py-3"
+                      className="group flex w-full cursor-pointer items-center gap-1.5 px-0 py-2.5 pr-1 text-left transition-colors hover:bg-white/[0.03] focus-visible:bg-white/[0.03] focus-visible:outline-none sm:gap-3 sm:py-3 sm:pr-0"
                     >
                       <div className="flex min-w-0 flex-1 items-center gap-1.5 sm:gap-3">
                         <span
@@ -2898,7 +2898,6 @@ const PasswordManager = () => {
                             </button>
                           </>
                         )}
-                        <ChevronRight size={14} className="ml-0.5 shrink-0 text-white/35 transition-transform group-hover:translate-x-0.5 sm:ml-0" />
                       </div>
                     </div>
                   );
