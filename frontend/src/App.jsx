@@ -2844,7 +2844,7 @@ const PasswordManager = () => {
                           setSelectedCategory(cat.name);
                         }
                       }}
-                      className="group flex w-full cursor-pointer items-center gap-1.5 px-0 py-2 text-left transition-colors hover:bg-white/[0.03] focus-visible:bg-white/[0.03] focus-visible:outline-none sm:gap-3 sm:py-3"
+                      className="group flex w-full cursor-pointer items-center gap-1.5 px-0 py-2.5 text-left transition-colors hover:bg-white/[0.03] focus-visible:bg-white/[0.03] focus-visible:outline-none sm:gap-3 sm:py-3"
                     >
                       <div className="flex min-w-0 flex-1 items-center gap-1.5 sm:gap-3">
                         <span
@@ -2853,7 +2853,7 @@ const PasswordManager = () => {
                         />
                         <div className="min-w-0">
                           <div className="flex min-w-0 items-center gap-2">
-                            <h3 className="truncate text-[17px] font-semibold tracking-wide text-white sm:text-[15px]">{cat.name}</h3>
+                            <h3 className="truncate text-[18px] leading-[1.2] font-semibold tracking-wide text-white sm:text-[15px]">{cat.name}</h3>
                             {isSystemCategory(cat.name) && (
                               <span className="rounded-full border border-white/10 bg-black/15 px-1 py-0.5 text-[8px] font-semibold uppercase tracking-[0.14em] text-white/70">
                                 Sistema
