@@ -4991,7 +4991,7 @@ const MainLayout = () => {
           </div>
         </div>
 
-        <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain p-4 pb-28 md:p-8 md:pb-12">
+        <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain p-4 pb-40 md:p-8 md:pb-12">
           {activeTab === 'dashboard' && <Dashboard />}
           {activeTab === 'passwords' && <PasswordManager />}
           {activeTab === 'cards' && <CardManager />}
