@@ -76,6 +76,14 @@ const SMTP_USER = process.env.SMTP_USER || '';
 const SMTP_PASSWORD = process.env.SMTP_PASSWORD || '';
 const REGISTRATION_CODE_TTL_MINUTES = Number(process.env.REGISTRATION_CODE_TTL_MINUTES || 15);
 const REGISTRATION_MAX_ATTEMPTS = Number(process.env.REGISTRATION_MAX_ATTEMPTS || 5);
+const ALLOWED_EMAILS = new Set(
+    String(process.env.ALLOWED_EMAILS || '')
+        .split(',')
+        .map((item) => item.trim().toLowerCase())
+        .filter(Boolean)
+);
+const AUTH_MAX_FAILED_ATTEMPTS = Number(process.env.AUTH_MAX_FAILED_ATTEMPTS || 5);
+const AUTH_LOCKOUT_MINUTES = Number(process.env.AUTH_LOCKOUT_MINUTES || 15);
 const FAVICON_CACHE_TTL_MS = 24 * 60 * 60 * 1000;
 const faviconCache = new Map();
 
@@ -531,12 +539,45 @@ function getCredentialCounter(credential) {
     return Number.isFinite(counter) && counter >= 0 ? counter : 0;
 }
 
+const failedAuthAttempts = new Map();
+
+function checkAuthLockout(userId) {
+    const entry = failedAuthAttempts.get(userId);
+    if (!entry) return;
+    if (entry.lockedUntil && entry.lockedUntil > Date.now()) {
+        const minutes = Math.ceil((entry.lockedUntil - Date.now()) / 60000);
+        const err = new Error(`Demasiadas tentativas falhadas. Tenta novamente dentro de ${minutes} min.`);
+        err.status = 429;
+        throw err;
+    }
+    if (entry.lockedUntil) failedAuthAttempts.delete(userId);
+}
+
+function recordAuthFailure(userId) {
+    const entry = failedAuthAttempts.get(userId) || { count: 0, lockedUntil: 0 };
+    entry.count += 1;
+    if (entry.count >= AUTH_MAX_FAILED_ATTEMPTS) {
+        entry.count = 0;
+        entry.lockedUntil = Date.now() + AUTH_LOCKOUT_MINUTES * 60000;
+    }
+    failedAuthAttempts.set(userId, entry);
+}
+
+function masterHashMatches(vault, hash) {
+    const expected = Buffer.from(String(vault?.master_hash || ''));
+    const received = Buffer.from(String(hash || ''));
+    return expected.length > 0 && expected.length === received.length && crypto.timingSafeEqual(expected, received);
+}
+
 function verifyMasterHash(vault, hash) {
-    if (!vault || vault.master_hash !== hash) {
+    if (vault?.user_id) checkAuthLockout(vault.user_id);
+    if (!masterHashMatches(vault, hash)) {
+        if (vault?.user_id) recordAuthFailure(vault.user_id);
         const err = new Error('Não autorizado.');
         err.status = 401;
         throw err;
     }
+    failedAuthAttempts.delete(vault.user_id);
 }
 
 function isRegistrationExpired(row) {
@@ -679,6 +720,11 @@ async function startRegistrationRequest({ identifier, hash, salt, vaultKeyWrapMa
     if (!normalized || !isValidEmail(normalized)) {
         const err = new Error('É necessário um email válido para criar a conta.');
         err.status = 400;
+        throw err;
+    }
+    if (ALLOWED_EMAILS.size && !ALLOWED_EMAILS.has(normalized)) {
+        const err = new Error('O registo não está permitido para este email.');
+        err.status = 403;
         throw err;
     }
 
@@ -879,7 +925,11 @@ app.post('/api/login', async (req, res) => {
 
         const vault = await loadVaultByUserId(user.id);
         if (!vault) return res.status(404).json({ error: 'Cofre não configurado.' });
-        if (vault.master_hash !== hash) return res.status(401).json({ error: 'Password inválida.' });
+        try {
+            verifyMasterHash(vault, hash);
+        } catch (authErr) {
+            return res.status(authErr.status || 401).json({ error: authErr.status === 429 ? authErr.message : 'Password inválida.' });
+        }
 
         res.json({
             user: { id: user.id, email: user.email || null, username: user.username || null },

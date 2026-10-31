@@ -3611,7 +3611,7 @@ const GlobalQuickEditModals = () => {
 };
 
 const PasswordGenerator = () => {
-  const { t, copyToClipboard } = useContext(AppContext);
+  const { t, copyToClipboard, showToast } = useContext(AppContext);
   const [length, setLength] = useState(16);
   const [opts, setOpts] = useState({ upper: true, lower: true, numbers: true, symbols: true });
   const [generated, setGenerated] = useState('');
@@ -3980,7 +3980,7 @@ const SettingsScreen = () => {
       setCategories(nextCategories);
       sessionStorage.setItem(PASSWORDS_PENDING_CATEGORY_KEY, 'Other');
       setActiveTab('passwords');
-      await persistVault(nextCategories, nextPasswords);
+      await syncVault({ nextCategories, nextPasswords, nextCards: cards });
       showToast(`Importados ${created} registos${replaced ? `, ${replaced} substituídos` : ''}${ignored ? `, ${ignored} ignorados` : ''}.`);
       resetBitwardenImport();
     } catch (err) {
