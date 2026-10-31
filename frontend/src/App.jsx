@@ -8,7 +8,7 @@ import {
   Lock, Unlock, Shield, Key, CreditCard, LayoutDashboard, Settings, Plus,
   Search, Eye, EyeOff, Copy, Trash, Edit, Check, Star, AlertTriangle,
   LogOut, Clock, Globe, Menu, X, ChevronRight, ChevronDown, Hash, RefreshCw, Palette, Sparkles, Loader2,
-  Folder, FolderPlus, ArrowLeft, Upload, FileText, ArrowLeftRight
+  Folder, FolderPlus, ArrowLeft, Upload, FileText, ArrowLeftRight, Ellipsis, ExternalLink
 } from 'lucide-react';
 
 // ==========================================
@@ -1562,6 +1562,35 @@ const getFavicon = (url) => {
   } catch { return null; }
 };
 
+const generateRandomPassword = (length = 18) => {
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789!@#$%&*?-_';
+  const values = new Uint32Array(length);
+  crypto.getRandomValues(values);
+  return Array.from(values, (value) => chars[value % chars.length]).join('');
+};
+
+const STRENGTH_LABELS = { weak: 'Fraca', medium: 'Média', strong: 'Forte' };
+
+const EntryIcon = ({ url, title, className = 'h-10 w-10', imgClassName = 'h-6 w-6' }) => {
+  const src = getFavicon(url);
+  const [status, setStatus] = useState('loading');
+  const initial = (title || '').trim().charAt(0).toUpperCase();
+  return (
+    <div className={`relative flex shrink-0 items-center justify-center overflow-hidden rounded-xl border border-white/8 bg-[var(--primary)]/10 text-sm font-black text-[var(--primary)] ${className}`}>
+      {status !== 'ok' && (initial || <Lock size={16} />)}
+      {src && status !== 'failed' && (
+        <img
+          src={src}
+          alt=""
+          className={`${imgClassName} object-contain ${status === 'ok' ? '' : 'absolute opacity-0'}`}
+          onLoad={() => setStatus('ok')}
+          onError={() => setStatus('failed')}
+        />
+      )}
+    </div>
+  );
+};
+
 const getCardType = (number) => {
   const clean = number.replace(/\D/g, '');
   if (clean.startsWith('4')) return 'Visa';
@@ -2500,6 +2529,7 @@ const PasswordManager = () => {
   const [isCatModalOpen, setIsCatModalOpen] = useState(false);
   const [newCatName, setNewCatName] = useState('');
   const [editingCategory, setEditingCategory] = useState(null);
+  const [folderMenu, setFolderMenu] = useState(null);
 
   const [form, setForm] = useState({ title: '', url: '', username: '', password: '', notes: '', category: 'Other', favorite: false });
   const [showPwdInForm, setShowPwdInForm] = useState(false);
@@ -2806,23 +2836,30 @@ const PasswordManager = () => {
   return (
     <div className="relative h-full min-h-0 overflow-hidden bg-transparent">
       <div className="relative flex h-full min-h-0 flex-col p-2 sm:p-6 lg:p-8">
-        <div className="mx-auto flex w-full max-w-4xl flex-col items-center text-center">
-          <h1 className="mt-2 text-2xl font-black tracking-tight text-[var(--text)] sm:mt-4 sm:text-4xl">
-            {t('passwords')}
-          </h1>
-        </div>
-
-        {!selectedCategory ? (
-          <div className="mt-6 flex-1 min-h-0 overflow-y-auto overscroll-contain pb-24 sm:pb-10">
-            <div className="mb-5 flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:justify-center sm:gap-3">
-              <Button onClick={() => handleOpenModal()} icon={Plus} className="w-full rounded-2xl px-5 sm:w-auto">
+        {!selectedCategory && (
+          <div className="flex w-full items-center justify-between gap-3 px-1 pt-1 sm:pt-2">
+            <h1 className="text-2xl font-black tracking-tight text-[var(--text)] sm:text-3xl">
+              {t('passwords')}
+            </h1>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={openNewCategory}
+                className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-[var(--border)] bg-[var(--surface-hover)] text-[var(--text)] transition-colors hover:bg-[var(--border)]"
+                aria-label={t('newCategory')}
+                title={t('newCategory')}
+              >
+                <FolderPlus size={18} />
+              </button>
+              <Button onClick={() => handleOpenModal()} icon={Plus} className="rounded-xl px-4">
                 {t('addPassword')}
               </Button>
-              <Button onClick={openNewCategory} variant="secondary" icon={Plus} className="w-full rounded-2xl px-5 sm:w-auto">
-                {t('newCategory')}
-              </Button>
             </div>
+          </div>
+        )}
 
+        {!selectedCategory ? (
+          <div className="mt-4 flex-1 min-h-0 overflow-y-auto overscroll-contain pb-24 sm:pb-10">
             <div className="w-full">
               <div className="divide-y divide-white/8 border-y border-white/8 sm:rounded-none">
                 {visibleCategories.map(cat => {
@@ -2864,12 +2901,12 @@ const PasswordManager = () => {
                       </div>
 
                       <div className="flex shrink-0 items-center gap-2">
-                        <span className="w-fit rounded-full border border-black/35 bg-black/40 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-[0.14em] text-white/90 backdrop-blur sm:px-2.5 sm:py-1 sm:text-[10px]">
+                        <span className={`w-fit rounded-full border border-black/35 bg-black/40 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-[0.14em] backdrop-blur sm:px-2.5 sm:py-1 sm:text-[10px] ${getCatCount(cat.name) === 0 ? 'text-white/40' : 'text-white/90'}`}>
                           {getCatCount(cat.name)} {t('items')}
                         </span>
                       </div>
 
-                      <div className="flex shrink-0 items-center gap-1" data-folder-actions="true">
+                      <div className="relative flex shrink-0 items-center" data-folder-actions="true">
                         {!isSystemCategory(cat.name) && (
                           <>
                             <button
@@ -2877,25 +2914,35 @@ const PasswordManager = () => {
                               onMouseDown={(e) => e.stopPropagation()}
                               onClick={(e) => {
                                 e.stopPropagation();
-                                openEditCategory(cat);
+                                setFolderMenu((current) => (current === cat.name ? null : cat.name));
                               }}
-                              className="rounded-full border border-white/10 bg-white/5 p-[5px] text-white/70 transition-colors hover:bg-white/10 hover:text-white sm:p-2"
-                              aria-label={`Editar ${cat.name}`}
+                              className="rounded-full p-2 text-white/60 transition-colors hover:bg-white/10 hover:text-white"
+                              aria-label={`Opções de ${cat.name}`}
+                              aria-expanded={folderMenu === cat.name}
                             >
-                              <Edit size={11} className="text-sky-400" />
+                              <Ellipsis size={18} />
                             </button>
-                            <button
-                              type="button"
-                              onMouseDown={(e) => e.stopPropagation()}
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleDeleteCategory(cat.name);
-                              }}
-                              className="rounded-full border border-white/10 bg-white/5 p-[5px] text-white/70 transition-colors hover:bg-white/10 hover:text-white sm:p-2"
-                              aria-label={`Apagar ${cat.name}`}
-                            >
-                              <Trash size={11} className="text-rose-400" />
-                            </button>
+                            {folderMenu === cat.name && (
+                              <>
+                                <div className="fixed inset-0 z-30" onClick={(e) => { e.stopPropagation(); setFolderMenu(null); }} />
+                                <div className="absolute right-0 top-full z-40 mt-1 w-40 overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--surface)] py-1 shadow-xl shadow-black/40">
+                                  <button
+                                    type="button"
+                                    onClick={(e) => { e.stopPropagation(); setFolderMenu(null); openEditCategory(cat); }}
+                                    className="flex w-full items-center gap-2 px-3 py-2.5 text-sm text-[var(--text)] hover:bg-white/5"
+                                  >
+                                    <Edit size={14} className="text-sky-400" /> Editar
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={(e) => { e.stopPropagation(); setFolderMenu(null); handleDeleteCategory(cat.name); }}
+                                    className="flex w-full items-center gap-2 px-3 py-2.5 text-sm text-[var(--danger)] hover:bg-white/5"
+                                  >
+                                    <Trash size={14} /> Apagar
+                                  </button>
+                                </div>
+                              </>
+                            )}
                           </>
                         )}
                       </div>
@@ -2912,100 +2959,111 @@ const PasswordManager = () => {
           </div>
         ) : (
           <div className="mt-6 flex-1 min-h-0 overflow-y-auto overscroll-contain pb-24 sm:pb-10">
-            <div className="mb-5 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-              <div className="w-full lg:w-auto">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setDetailItem(null);
-                    setSelectedCategory(null);
-                    setSearch('');
-                  }}
-                  className="inline-flex w-full items-center justify-center gap-2 rounded-full border border-[var(--border)] bg-[var(--bg)]/60 px-3 py-2 text-xs font-semibold uppercase tracking-[0.22em] text-[var(--text-muted)] transition-colors hover:border-[var(--primary)] hover:text-[var(--primary)] lg:w-auto"
-                >
-                  <ArrowLeft size={12} />
-                  {t('backToFolders')}
-                </button>
-                <h2 className="mt-4 text-2xl font-black text-[var(--text)] sm:text-3xl">{selectedCategory}</h2>
-                <p className="mt-2 text-sm text-[var(--text-muted)]">
+            <button
+              type="button"
+              onClick={() => {
+                setDetailItem(null);
+                setSelectedCategory(null);
+                setSearch('');
+              }}
+              className="mb-3 inline-flex items-center gap-1.5 rounded-full px-2 py-1.5 text-sm font-medium text-[var(--text-muted)] transition-colors hover:text-[var(--primary)]"
+            >
+              <ArrowLeft size={16} />
+              {t('passwords')}
+            </button>
+
+            <div className="mb-4 flex items-end justify-between gap-3">
+              <div className="min-w-0">
+                <h2 className="truncate text-2xl font-black text-[var(--text)] sm:text-3xl">{selectedCategory}</h2>
+                <p className="mt-1 text-sm text-[var(--text-muted)]">
                   {selectedCategoryCount} {t('items')}
                 </p>
               </div>
 
-              <Button onClick={() => handleOpenModal()} icon={Plus} className="w-full rounded-2xl px-5 sm:w-auto">
-                {t('addPassword')}
-              </Button>
-              {selectedCategory === 'Other' && (
-                <Button onClick={handleRemoveOtherDuplicates} variant="secondary" icon={Trash} className="w-full rounded-2xl px-5 sm:w-auto">
-                  {t('removeOtherDuplicates')}
+              <div className="flex shrink-0 items-center gap-2">
+                {selectedCategory === 'Other' && (
+                  <Button onClick={handleRemoveOtherDuplicates} variant="secondary" icon={Trash} className="rounded-xl px-3" title={t('removeOtherDuplicates')} aria-label={t('removeOtherDuplicates')} />
+                )}
+                <Button onClick={() => handleOpenModal()} icon={Plus} className="rounded-xl px-4">
+                  {t('addPassword')}
                 </Button>
-              )}
+              </div>
             </div>
 
-            <div className="grid gap-3 lg:grid-cols-[1fr_auto]">
-              <div className="rounded-2xl border border-[var(--border)] bg-[var(--bg)]/60 px-4 py-3 shadow-inner shadow-black/5">
-                <div className="flex items-center gap-3">
-                  <Search size={18} className="text-[var(--text-muted)] shrink-0" />
-                  <input
-                    value={search}
-                    onChange={e => setSearch(e.target.value)}
-                    placeholder={t('search')}
-                    className="w-full bg-transparent text-sm text-[var(--text)] placeholder:text-[var(--text-muted)] outline-none"
-                  />
-                </div>
-              </div>
-
-              <div className="hidden lg:flex items-center rounded-2xl border border-[var(--border)] bg-[var(--bg)]/60 px-4 py-3 text-sm text-[var(--text-muted)]">
-                {selectedCategory}
+            <div className="rounded-2xl border border-[var(--border)] bg-[var(--bg)]/60 px-4 py-3 shadow-inner shadow-black/5">
+              <div className="flex items-center gap-3">
+                <Search size={18} className="text-[var(--text-muted)] shrink-0" />
+                <input
+                  value={search}
+                  onChange={e => setSearch(e.target.value)}
+                  placeholder={t('search')}
+                  className="w-full bg-transparent text-sm text-[var(--text)] placeholder:text-[var(--text-muted)] outline-none"
+                />
               </div>
             </div>
 
             <div className="mt-5 pb-8 sm:pb-0">
               {filtered.length === 0 ? (
-                <div className="flex h-[180px] items-center justify-center border-y border-dashed border-[var(--border)] bg-transparent text-[var(--text-muted)]">
-                  <span className="text-sm">{selectedCategory}</span>
+                <div className="flex h-[200px] flex-col items-center justify-center gap-3 rounded-2xl border border-dashed border-[var(--border)] text-center text-[var(--text-muted)]">
+                  <Lock size={28} className="opacity-50" />
+                  <span className="text-sm">{search || globalTerms.length ? t('noData') : `Ainda não tens passwords em ${selectedCategory}`}</span>
+                  {!search && !globalTerms.length && (
+                    <Button onClick={() => handleOpenModal()} icon={Plus} variant="secondary" className="rounded-xl px-4">
+                      {t('addPassword')}
+                    </Button>
+                  )}
                 </div>
               ) : (
-                <div className="divide-y divide-white/8 border-y border-white/8">
+                <div className="divide-y divide-white/[0.06] border-y border-white/[0.06]">
                   {filtered.map(item => (
                     <div
                       key={item.id}
-                      className="group grid cursor-pointer grid-cols-1 items-start gap-3 px-0 py-3 text-left transition-colors hover:bg-white/[0.03] focus-visible:bg-white/[0.03] focus-visible:outline-none sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center sm:gap-4"
+                      className="group flex items-center gap-1 px-0 py-1 transition-colors hover:bg-white/[0.04]"
                     >
                       <button
                         type="button"
                         onClick={() => setDetailItem(item)}
-                        className="flex min-w-0 items-center gap-3 text-left sm:pr-4"
+                        className="flex min-w-0 flex-1 items-center gap-3 py-2 text-left"
                       >
-                        <div className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden">
-                          <img
-                            src={getFavicon(item.url)}
-                            alt=""
-                            className="h-7 w-7 object-contain"
-                            onError={(e) => { e.target.style.display = 'none'; e.target.nextSibling.style.display = 'flex'; }}
-                          />
-                          <div className="hidden h-9 w-9 items-center justify-center text-sm font-black text-white/90">
-                            {item.title.charAt(0)}
-                          </div>
-                        </div>
+                        <EntryIcon key={getFavicon(item.url) || item.id} url={item.url} title={item.title} />
 
                         <div className="min-w-0 flex-1">
                           <div className="flex items-center gap-2">
                             <h3 className="truncate text-sm font-semibold text-[var(--text)]">
                               {item.title}
                             </h3>
-                            {item.favorite && <Star size={14} className="fill-current text-yellow-500" />}
+                            {item.favorite && <Star size={14} className="shrink-0 fill-current text-yellow-500" />}
                           </div>
-                          <p className="mt-1 truncate text-xs text-[var(--text-muted)]">
+                          <p className="mt-0.5 truncate text-xs text-[var(--text-muted)]">
                             {item.username || '—'}
                           </p>
                         </div>
-
-                        <ChevronRight
-                          size={15}
-                          className="shrink-0 text-[var(--text-muted)] transition-transform duration-200 group-hover:translate-x-0.5"
-                        />
                       </button>
+
+                      <div className="flex shrink-0 items-center gap-1">
+                        {item.url && (
+                          <a
+                            href={item.url.startsWith('http') ? item.url : `https://${item.url}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="hidden h-9 w-9 items-center justify-center rounded-full text-[var(--text-muted)] transition-colors hover:bg-white/8 hover:text-[var(--primary)] sm:inline-flex"
+                            title="Abrir site"
+                            aria-label={`Abrir site de ${item.title}`}
+                          >
+                            <ExternalLink size={15} />
+                          </a>
+                        )}
+                        <button
+                          type="button"
+                          onClick={() => copyToClipboard(item.password)}
+                          className="inline-flex h-9 w-9 items-center justify-center rounded-full text-[var(--text-muted)] transition-colors hover:bg-white/8 hover:text-[var(--primary)]"
+                          title="Copiar password"
+                          aria-label={`Copiar password de ${item.title}`}
+                        >
+                          <Copy size={15} />
+                        </button>
+                        <ChevronRight size={15} className="text-[var(--text-muted)]" />
+                      </div>
                     </div>
                   ))}
                 </div>
@@ -3017,18 +3075,8 @@ const PasswordManager = () => {
         <Modal isOpen={!!detailItem} onClose={() => setDetailItem(null)} title={detailItem?.title || t('passwords')}>
           {detailItem && (
             <div className="space-y-4">
-              <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-                <div className="flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-2xl border border-white/8 bg-black/15">
-                  <img
-                    src={getFavicon(detailItem.url)}
-                    alt=""
-                    className="h-7 w-7 object-contain"
-                    onError={(e) => { e.target.style.display = 'none'; e.target.nextSibling.style.display = 'flex'; }}
-                  />
-                  <div className="hidden h-12 w-12 items-center justify-center text-sm font-black text-white/90">
-                    {detailItem.title.charAt(0)}
-                  </div>
-                </div>
+              <div className="flex items-center gap-3">
+                <EntryIcon key={getFavicon(detailItem.url) || detailItem.id} url={detailItem.url} title={detailItem.title} className="h-14 w-14" imgClassName="h-8 w-8" />
                 <div className="min-w-0">
                   <h3 className="truncate text-lg font-semibold text-[var(--text)]">{detailItem.title}</h3>
                   <p className="truncate text-sm text-[var(--text-muted)]">{selectedCategory}</p>
@@ -3036,6 +3084,21 @@ const PasswordManager = () => {
               </div>
 
               <div className="space-y-3">
+                {detailItem.url && (
+                  <a
+                    href={detailItem.url.startsWith('http') ? detailItem.url : `https://${detailItem.url}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center gap-3 rounded-2xl border border-white/8 bg-black/10 px-3 py-3 transition-colors hover:border-[var(--primary)]"
+                  >
+                    <div className="min-w-0 flex-1">
+                      <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-[var(--text-muted)]">Website</p>
+                      <p className="mt-1 truncate text-sm text-[var(--primary)]">{detailItem.url}</p>
+                    </div>
+                    <ExternalLink size={14} className="shrink-0 text-[var(--text-muted)]" />
+                  </a>
+                )}
+
                 <div className="flex items-center gap-3 rounded-2xl border border-white/8 bg-black/10 px-3 py-3">
                   <div className="min-w-0 flex-1">
                     <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-[var(--text-muted)]">User</p>
@@ -3044,33 +3107,34 @@ const PasswordManager = () => {
                   <button
                     type="button"
                     onClick={() => copyToClipboard(detailItem.username)}
-                    className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-white/8 bg-white/5 text-[var(--text-muted)] transition-colors hover:border-[var(--primary)] hover:text-[var(--primary)]"
+                    className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-white/8 bg-white/5 px-3 py-1.5 text-xs font-medium text-[var(--text-muted)] transition-colors hover:border-[var(--primary)] hover:text-[var(--primary)]"
                     title="Copiar utilizador"
                   >
-                    <Copy size={13} />
+                    <Copy size={13} /> Copiar
                   </button>
                 </div>
 
-                <div className="flex items-center gap-3 rounded-2xl border border-[var(--primary)]/20 bg-[linear-gradient(135deg,rgba(124,92,255,0.14),rgba(255,255,255,0.03))] px-3 py-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]">
-                  <div className="min-w-0 flex-1">
-                    <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-[var(--primary)]/90">Password</p>
-                    <div className="mt-1">
+                <div className="rounded-2xl border border-[var(--primary)]/40 bg-[linear-gradient(135deg,rgba(124,92,255,0.18),rgba(255,255,255,0.03))] px-4 py-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]">
+                  <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-[var(--primary)]/90">Password</p>
+                  <div className="mt-2 flex items-center gap-3">
+                    <div className="min-w-0 flex-1">
                       <SecretText
                         text={detailItem.password}
                         showCopy={false}
-                        textClassName="truncate text-sm font-semibold tracking-[0.16em] text-[var(--text)]"
+                        containerClassName="min-w-0"
+                        textClassName="truncate text-base font-semibold tracking-[0.12em] text-[var(--text)]"
                         toggleClassName="rounded-full border border-[var(--primary)]/20 bg-black/10 p-1.5 text-[var(--primary)] hover:bg-[var(--primary)]/12"
                       />
                     </div>
+                    <button
+                      type="button"
+                      onClick={() => copyToClipboard(detailItem.password)}
+                      className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-[var(--primary)] px-3.5 py-2 text-xs font-semibold text-white transition-colors hover:bg-[var(--primary-hover)]"
+                      title="Copiar password"
+                    >
+                      <Copy size={13} /> Copiar
+                    </button>
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => copyToClipboard(detailItem.password)}
-                    className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-[var(--primary)]/20 bg-black/10 text-[var(--primary)] transition-colors hover:border-[var(--primary)] hover:bg-[var(--primary)]/12"
-                    title="Copiar password"
-                  >
-                    <Key size={13} />
-                  </button>
                 </div>
 
                 {detailItem.notes && (
@@ -3078,6 +3142,12 @@ const PasswordManager = () => {
                     <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-[var(--text-muted)]">Notas</p>
                     <p className="mt-1 text-sm leading-relaxed text-[var(--text)] whitespace-pre-wrap">{detailItem.notes}</p>
                   </div>
+                )}
+
+                {detailItem.date && (
+                  <p className="px-1 text-xs text-[var(--text-muted)]">
+                    Última alteração: {new Date(detailItem.date).toLocaleDateString('pt-PT', { day: '2-digit', month: 'short', year: 'numeric' })}
+                  </p>
                 )}
 
                 <div className="flex flex-col gap-2 pt-1 sm:flex-row">
@@ -3112,8 +3182,7 @@ const PasswordManager = () => {
         <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title={editingItem ? t('edit') : t('addPassword')}>
           <form onSubmit={handleSave} className="space-y-4">
             <div className="flex items-center justify-center mb-4">
-              <img src={getFavicon(form.url)} alt="" className="w-16 h-16 rounded-2xl bg-[var(--bg)] p-2 border border-[var(--border)]" onError={(e) => { e.target.style.display = 'none'; e.target.nextSibling.style.display = 'flex'; }} />
-              <div className="w-16 h-16 rounded-2xl bg-[var(--primary)]/20 text-[var(--primary)] hidden items-center justify-center font-bold text-2xl border border-[var(--border)]">{form.title ? form.title.charAt(0) : <Globe />}</div>
+              <EntryIcon key={getFavicon(form.url) || 'none'} url={form.url} title={form.title} className="h-16 w-16 rounded-2xl" imgClassName="h-10 w-10" />
             </div>
 
             <div className="flex items-center justify-between mb-2">
@@ -3125,7 +3194,7 @@ const PasswordManager = () => {
                   type="button"
                   onClick={handleSmartFill}
                   disabled={isGeneratingInfo || (!form.title && !form.url)}
-                  className="flex items-center text-xs font-medium px-2 py-1 rounded bg-gradient-to-r from-purple-500/10 to-pink-500/10 text-purple-500 hover:from-purple-500/20 hover:to-pink-500/20 border border-purple-500/30 transition-all disabled:opacity-50"
+                  className="flex items-center text-xs font-medium px-2.5 py-1.5 rounded-lg bg-purple-500/15 text-purple-300 hover:bg-purple-500/25 border border-purple-400/40 transition-all disabled:opacity-50"
                 >
                   {isGeneratingInfo ? <Loader2 size={12} className="animate-spin mr-1" /> : <Sparkles size={12} className="mr-1" />}
                   {t('smartFill')}
@@ -3143,20 +3212,35 @@ const PasswordManager = () => {
               </div>
             )}
 
-            <Input label={t('serviceName')} value={form.title} onChange={e => setForm({ ...form, title: e.target.value })} required />
+            <Input label={t('serviceName')} value={form.title} onChange={e => setForm({ ...form, title: e.target.value })} placeholder="ex.: Netflix" required />
             <Input label={t('url')} value={form.url} onChange={e => setForm({ ...form, url: e.target.value })} placeholder="https://" />
-            <Input label={t('username')} value={form.username} onChange={e => setForm({ ...form, username: e.target.value })} />
+            <Input label={t('username')} value={form.username} onChange={e => setForm({ ...form, username: e.target.value })} placeholder="email ou nome de utilizador" autoComplete="off" />
 
             <div className="relative">
-              <Input label={t('password')} type={showPwdInForm ? 'text' : 'password'} value={form.password} onChange={e => setForm({ ...form, password: e.target.value })} rightIcon={showPwdInForm ? <EyeOff size={18} /> : <Eye size={18} />} onRightIconClick={() => setShowPwdInForm(!showPwdInForm)} required />
-              {form.password && (
-                <div className="absolute top-1 right-1 flex items-center space-x-1">
-                  <div className={`h-1.5 w-10 rounded-full ${checkPasswordStrength(form.password).color}`}></div>
-                </div>
-              )}
+              <Input label={t('password')} type={showPwdInForm ? 'text' : 'password'} value={form.password} onChange={e => setForm({ ...form, password: e.target.value })} rightIcon={showPwdInForm ? <EyeOff size={18} /> : <Eye size={18} />} onRightIconClick={() => setShowPwdInForm(!showPwdInForm)} className="!mb-2" required />
+              <div className="mb-4 flex items-center justify-between gap-3">
+                {form.password ? (
+                  <div className="flex min-w-0 flex-1 items-center gap-2">
+                    <div className="h-1.5 w-24 overflow-hidden rounded-full bg-white/10">
+                      <div
+                        className={`h-full rounded-full transition-all ${checkPasswordStrength(form.password).color}`}
+                        style={{ width: `${Math.max(20, (checkPasswordStrength(form.password).score / 5) * 100)}%` }}
+                      />
+                    </div>
+                    <span className="text-xs text-[var(--text-muted)]">{STRENGTH_LABELS[checkPasswordStrength(form.password).label]}</span>
+                  </div>
+                ) : <span />}
+                <button
+                  type="button"
+                  onClick={() => { setForm({ ...form, password: generateRandomPassword() }); setShowPwdInForm(true); }}
+                  className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-[var(--border)] px-2.5 py-1.5 text-xs font-medium text-[var(--text-muted)] transition-colors hover:border-[var(--primary)] hover:text-[var(--primary)]"
+                >
+                  <RefreshCw size={12} /> Gerar password
+                </button>
+              </div>
             </div>
 
-            <Input label={t('notes')} value={form.notes} onChange={e => setForm({ ...form, notes: e.target.value })} />
+            <Input label={t('notes')} value={form.notes} onChange={e => setForm({ ...form, notes: e.target.value })} placeholder="Opcional" />
 
             <div className="flex space-x-3 pt-4">
               {editingItem && <Button type="button" variant="danger" icon={Trash} onClick={() => handleDelete(editingItem.id)} className="px-3" />}
