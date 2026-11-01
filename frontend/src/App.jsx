@@ -3271,6 +3271,7 @@ const CardManager = () => {
   const { cards, setCards, t, copyToClipboard, globalSearch, registerScreenBackHandler } = useContext(AppContext);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingItem, setEditingItem] = useState(null);
+  const [detailCard, setDetailCard] = useState(null);
   const globalTerms = useMemo(() => splitSearchTerms(globalSearch), [globalSearch]);
 
   const [form, setForm] = useState({ name: '', number: '', holder: '', expiry: '', cvv: '', pin: '', color: 'from-blue-600 to-blue-900' });
@@ -3308,8 +3309,12 @@ const CardManager = () => {
       setIsModalOpen(false);
       return true;
     }
+    if (detailCard) {
+      setDetailCard(null);
+      return true;
+    }
     return false;
-  }), [registerScreenBackHandler, isModalOpen]);
+  }), [registerScreenBackHandler, isModalOpen, detailCard]);
 
   // Visual Card Component
   const VisualCard = ({ card, onClick }) => {
@@ -3350,10 +3355,62 @@ const CardManager = () => {
           <div className="text-center text-[var(--text-muted)] py-10">{t('noData')}</div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {filteredCards.map(card => <VisualCard key={card.id} card={card} onClick={() => handleOpenModal(card)} />)}
+            {filteredCards.map(card => <VisualCard key={card.id} card={card} onClick={() => setDetailCard(card)} />)}
           </div>
         )}
       </div>
+
+      <Modal isOpen={!!detailCard} onClose={() => setDetailCard(null)} title={detailCard?.name || t('cards')}>
+        {detailCard && (
+          <div className="space-y-4">
+            <VisualCard card={detailCard} />
+
+            <div className="space-y-3">
+              {[
+                { label: t('cardNumber'), value: detailCard.number ? formatCardNumber(detailCard.number) : '', mask: '•••• •••• •••• ••••', copyValue: detailCard.number },
+                { label: t('cvv'), value: detailCard.cvv, mask: '•••', copyValue: detailCard.cvv },
+                { label: t('pin'), value: detailCard.pin, mask: '••••', copyValue: detailCard.pin },
+              ].map((field) => (
+                <div key={field.label} className="rounded-2xl border border-white/8 bg-black/10 px-3 py-3">
+                  <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-[var(--text-muted)]">{field.label}</p>
+                  <div className="mt-1">
+                    {field.value ? (
+                      <SecretText
+                        text={field.value}
+                        mask={field.mask}
+                        textClassName="text-base font-semibold"
+                        toggleClassName="rounded-full border border-white/8 bg-white/5 p-1.5"
+                        copyClassName="rounded-full border border-white/8 bg-white/5 p-1.5"
+                      />
+                    ) : (
+                      <span className="text-sm text-[var(--text-muted)]">—</span>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <div className="flex flex-col gap-2 pt-1 sm:flex-row">
+              <button
+                type="button"
+                onClick={() => { const card = detailCard; setDetailCard(null); handleOpenModal(card); }}
+                className="inline-flex w-full flex-1 items-center justify-center gap-1.5 rounded-full border border-white/8 bg-white/5 px-4 py-2 text-[11px] font-medium text-[var(--text-muted)] transition-colors hover:border-[var(--primary)] hover:text-[var(--primary)] sm:w-auto"
+              >
+                <Edit size={14} className="text-sky-400" />
+                <span>Editar</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => { const id = detailCard.id; setDetailCard(null); handleDelete(id); }}
+                className="inline-flex w-full flex-1 items-center justify-center gap-1.5 rounded-full border border-white/8 bg-white/5 px-4 py-2 text-[11px] font-medium text-[var(--text-muted)] transition-colors hover:border-[var(--danger)] hover:text-[var(--danger)] sm:w-auto"
+              >
+                <Trash size={14} className="text-rose-400" />
+                <span>Apagar</span>
+              </button>
+            </div>
+          </div>
+        )}
+      </Modal>
 
       <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title={editingItem ? t('edit') : t('addCard')}>
         <div className="mb-6"><VisualCard card={form} /></div>
