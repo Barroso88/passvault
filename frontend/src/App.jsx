@@ -1576,13 +1576,13 @@ const EntryIcon = ({ url, title, className = 'h-10 w-10', imgClassName = 'h-6 w-
   const [status, setStatus] = useState('loading');
   const initial = (title || '').trim().charAt(0).toUpperCase();
   return (
-    <div className={`relative flex shrink-0 items-center justify-center overflow-hidden rounded-xl border border-white/8 bg-[var(--primary)]/10 text-sm font-black text-[var(--primary)] ${className}`}>
+    <div className={`relative flex shrink-0 items-center justify-center overflow-hidden text-sm font-black text-[var(--primary)] ${className}`}>
       {status !== 'ok' && (initial || <Lock size={16} />)}
       {src && status !== 'failed' && (
         <img
           src={src}
           alt=""
-          className={`${imgClassName} object-contain ${status === 'ok' ? '' : 'absolute opacity-0'}`}
+          className={`${imgClassName} rounded-md object-contain ${status === 'ok' ? '' : 'absolute opacity-0'}`}
           onLoad={() => setStatus('ok')}
           onError={() => setStatus('failed')}
         />
@@ -3182,7 +3182,7 @@ const PasswordManager = () => {
         <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title={editingItem ? t('edit') : t('addPassword')}>
           <form onSubmit={handleSave} className="space-y-4">
             <div className="flex items-center justify-center mb-4">
-              <EntryIcon key={getFavicon(form.url) || 'none'} url={form.url} title={form.title} className="h-16 w-16 rounded-2xl" imgClassName="h-10 w-10" />
+              <EntryIcon key={getFavicon(form.url) || 'none'} url={form.url} title={form.title} className="h-16 w-16" imgClassName="h-12 w-12" />
             </div>
 
             <div className="flex items-center justify-between mb-2">
