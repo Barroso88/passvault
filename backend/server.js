@@ -29,24 +29,35 @@ app.get('/api/favicon', async (req, res) => {
             return res.redirect(302, cached);
         }
 
-        const googleUrl = `https://www.google.com/s2/favicons?domain=${encodeURIComponent(domain)}&sz=128`;
-        const iconHorseUrl = `https://icon.horse/icon/${encodeURIComponent(domain)}`;
+        // Some sites (e.g. www.portaldasfinancas.gov.pt) only have an icon under the exact
+        // host they serve, so try the host as typed, then the bare domain, then the www variant.
+        const bareHost = domain.replace(/^www\./, '');
+        const hosts = [...new Set([domain, bareHost, `www.${bareHost}`])];
+        const googleUrls = hosts.map((host) => `https://www.google.com/s2/favicons?domain=${encodeURIComponent(host)}&sz=128`);
+        const iconHorseUrls = hosts.map((host) => `https://icon.horse/icon/${encodeURIComponent(host)}`);
 
-        const googleProbe = await probeImageUrl(googleUrl).catch(() => null);
-        if (googleProbe && googleProbe.size !== 726) {
-            setCachedFaviconUrl(domain, googleUrl);
-            return res.redirect(302, googleUrl);
+        let googleFallback = null;
+        for (const googleUrl of googleUrls) {
+            const probe = await probeImageUrl(googleUrl).catch(() => null);
+            if (!probe) continue;
+            if (probe.size !== 726) {
+                setCachedFaviconUrl(domain, googleUrl);
+                return res.redirect(302, googleUrl);
+            }
+            googleFallback = googleFallback || googleUrl;
         }
 
-        const horseProbe = await probeImageUrl(iconHorseUrl).catch(() => null);
-        if (horseProbe) {
-            setCachedFaviconUrl(domain, iconHorseUrl);
-            return res.redirect(302, iconHorseUrl);
+        for (const iconHorseUrl of iconHorseUrls) {
+            const probe = await probeImageUrl(iconHorseUrl).catch(() => null);
+            if (probe) {
+                setCachedFaviconUrl(domain, iconHorseUrl);
+                return res.redirect(302, iconHorseUrl);
+            }
         }
 
-        if (googleProbe) {
-            setCachedFaviconUrl(domain, googleUrl);
-            return res.redirect(302, googleUrl);
+        if (googleFallback) {
+            setCachedFaviconUrl(domain, googleFallback);
+            return res.redirect(302, googleFallback);
         }
 
         return res.sendStatus(204);
@@ -129,7 +140,7 @@ const normalizeFaviconDomain = (value = '') => {
         const raw = String(value || '').trim();
         if (!raw) return '';
         const parsed = new URL(raw.startsWith('http') ? raw : `https://${raw}`);
-        return parsed.hostname.toLowerCase().replace(/^www\./, '');
+        return parsed.hostname.toLowerCase();
     } catch {
         return '';
     }
