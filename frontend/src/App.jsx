@@ -478,23 +478,30 @@ const createFolderColor = (order = 0) => {
   const seed = Number.isFinite(Number(order)) ? Math.max(0, Math.round(Number(order))) : 0;
   const hue = FOLDER_HUES[seed % FOLDER_HUES.length];
   const lap = Math.floor(seed / FOLDER_HUES.length);
-  const saturation = 78;
-  const lightness = Math.max(40, 54 - lap * 5);
+  const saturation = 90;
+  const lightness = Math.max(40, 53 - lap * 5);
   return {
     base: `hsl(${hue} ${saturation}% ${lightness}%)`,
     dark: `hsl(${hue} ${saturation}% ${Math.max(20, lightness - 24)}%)`,
-    glow: `hsla(${hue} ${saturation}% 58% / 0.30)`,
+    glow: `hsla(${hue} ${saturation}% 58% / 0.55)`,
   };
 };
 
 // Frosted-glass surface tinted with a category colour. Follows the theme through CSS variables.
 const glassStyle = (tone, strength = 1) => ({
-  background: `linear-gradient(135deg, ${tone.glow} 0%, color-mix(in srgb, var(--surface) ${Math.round(46 * strength)}%, transparent) 78%)`,
-  border: `1px solid color-mix(in srgb, ${tone.base} 28%, color-mix(in srgb, var(--text) 16%, transparent))`,
-  boxShadow: 'inset 0 1px 0 color-mix(in srgb, var(--text) 18%, transparent), inset 0 -1px 0 color-mix(in srgb, var(--text) 5%, transparent), 0 10px 30px -14px rgba(0, 0, 0, 0.55)',
-  backdropFilter: 'blur(18px) saturate(165%)',
-  WebkitBackdropFilter: 'blur(18px) saturate(165%)',
+  background: `linear-gradient(135deg, ${tone.glow} 0%, color-mix(in srgb, ${tone.base} 14%, transparent) 55%, color-mix(in srgb, var(--surface) ${Math.round(40 * strength)}%, transparent) 100%)`,
+  border: `1px solid color-mix(in srgb, ${tone.base} 55%, color-mix(in srgb, var(--text) 12%, transparent))`,
+  boxShadow: `inset 0 1px 0 color-mix(in srgb, var(--text) 22%, transparent), inset 0 -1px 0 color-mix(in srgb, var(--text) 5%, transparent), 0 12px 32px -14px color-mix(in srgb, ${tone.base} 60%, transparent)`,
+  backdropFilter: 'blur(18px) saturate(180%)',
+  WebkitBackdropFilter: 'blur(18px) saturate(180%)',
 });
+
+// Soft coloured orb clipped to the card, so the glass has something to refract.
+const GlassOrb = ({ tone }) => (
+  <span aria-hidden="true" className="pointer-events-none absolute inset-0 overflow-hidden rounded-2xl">
+    <span className="absolute -right-8 -top-12 h-32 w-32 rounded-full blur-2xl" style={{ background: tone.base, opacity: 0.5 }} />
+  </span>
+);
 
 const normalizeCategories = (input = []) => {
   const items = Array.isArray(input) ? input : [];
@@ -2985,31 +2992,8 @@ const PasswordManager = () => {
   const selectedCategoryMeta = selectedCategory ? orderedCategories.find((cat) => cat.name === selectedCategory) : null;
   const selectedTone = !selectedCategoryMeta || selectedCategory === 'Other' ? CATEGORY_NEUTRAL : createFolderColor(selectedCategoryMeta.order);
   const SelectedCategoryIcon = getCategoryIcon(selectedCategory || '');
-  const ambientTones = selectedCategory
-    ? [selectedTone, selectedTone, selectedTone]
-    : visibleCategories.slice(0, 4).map((cat) => (cat.name === 'Other' ? CATEGORY_NEUTRAL : createFolderColor(cat.order)));
-  const AMBIENT_SPOTS = [
-    { top: '-8%', left: '-14%' },
-    { top: '34%', right: '-18%' },
-    { bottom: '-10%', left: '12%' },
-    { top: '8%', right: '8%' },
-  ];
-
   return (
     <div className="relative h-full min-h-0 overflow-hidden bg-transparent">
-      <div
-        aria-hidden="true"
-        className="pointer-events-none absolute inset-0 overflow-hidden"
-        style={{ maskImage: 'radial-gradient(ellipse 75% 70% at 50% 45%, black 35%, transparent 100%)', WebkitMaskImage: 'radial-gradient(ellipse 75% 70% at 50% 45%, black 35%, transparent 100%)' }}
-      >
-        {ambientTones.map((tone, index) => (
-          <span
-            key={index}
-            className="absolute h-72 w-72 rounded-full blur-3xl sm:h-96 sm:w-96"
-            style={{ ...AMBIENT_SPOTS[index % AMBIENT_SPOTS.length], background: tone.base, opacity: 0.3 }}
-          />
-        ))}
-      </div>
       <div className="relative flex h-full min-h-0 flex-col p-2 sm:p-6 lg:p-8">
         {!selectedCategory && (
           <div className="flex w-full items-center justify-between gap-3 px-1 pt-1 sm:pt-2">
@@ -3066,6 +3050,7 @@ const PasswordManager = () => {
                       style={glassStyle(tone)}
                       className={`group relative flex w-full cursor-pointer items-center gap-3.5 rounded-2xl px-3.5 py-3 text-left transition-all duration-200 hover:-translate-y-px focus-visible:border-[var(--primary)] focus-visible:outline-none sm:px-4 sm:py-3.5 ${folderMenu === cat.name ? 'z-20' : ''}`}
                     >
+                      <GlassOrb tone={tone} />
                       <div
                         className="relative flex h-11 w-11 shrink-0 items-center justify-center rounded-xl ring-1 ring-inset ring-white/20 sm:h-12 sm:w-12"
                         style={{ background: `linear-gradient(145deg, ${tone.base}, ${tone.dark})`, boxShadow: `0 8px 18px -8px ${tone.base}` }}
@@ -3158,6 +3143,7 @@ const PasswordManager = () => {
               className="relative mb-4 flex items-center gap-3.5 rounded-2xl px-3.5 py-3 sm:px-4 sm:py-3.5"
               style={glassStyle(selectedTone)}
             >
+              <GlassOrb tone={selectedTone} />
               <div
                 className="relative flex h-11 w-11 shrink-0 items-center justify-center rounded-xl ring-1 ring-inset ring-white/20 sm:h-12 sm:w-12"
                 style={{ background: `linear-gradient(145deg, ${selectedTone.base}, ${selectedTone.dark})`, boxShadow: `0 8px 18px -8px ${selectedTone.base}` }}
@@ -3218,6 +3204,7 @@ const PasswordManager = () => {
                       style={glassStyle(selectedTone, 0.8)}
                       className="group relative flex items-center gap-1 rounded-2xl px-3.5 py-1.5 transition-all duration-200 hover:-translate-y-px sm:px-4"
                     >
+                      <GlassOrb tone={selectedTone} />
                       <button
                         type="button"
                         onClick={() => setDetailItem(item)}
