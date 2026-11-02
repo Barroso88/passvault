@@ -3024,7 +3024,7 @@ const PasswordManager = () => {
         )}
 
         {!selectedCategory ? (
-          <div className="mt-4 flex-1 min-h-0 overflow-y-auto overscroll-contain pb-24 sm:pb-10">
+          <div className="mt-4 flex-1 min-h-0 overflow-y-auto overscroll-contain pb-2 sm:pb-10">
             <div className="w-full">
               <div className="space-y-2.5">
                 {visibleCategories.map(cat => {
@@ -3125,7 +3125,7 @@ const PasswordManager = () => {
             </div>
           </div>
         ) : (
-          <div className="mt-6 flex-1 min-h-0 overflow-y-auto overscroll-contain pb-24 sm:pb-10">
+          <div className="mt-6 flex-1 min-h-0 overflow-y-auto overscroll-contain pb-2 sm:pb-10">
             <button
               type="button"
               onClick={() => {
@@ -3568,7 +3568,7 @@ const CardManager = () => {
         <Button onClick={() => handleOpenModal()} icon={Plus}>{t('addCard')}</Button>
       </div>
 
-      <div className="flex-1 overflow-y-auto pb-20">
+      <div className="flex-1 overflow-y-auto pb-2 md:pb-20">
         {filteredCards.length === 0 ? (
           <div className="text-center text-[var(--text-muted)] py-10">{t('noData')}</div>
         ) : (
@@ -5352,7 +5352,7 @@ const MainLayout = () => {
           </div>
         </div>
 
-        <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain p-4 pb-40 md:p-8 md:pb-12">
+        <div className={`flex-1 min-h-0 overflow-y-auto overscroll-contain p-4 md:p-8 md:pb-12 ${activeTab === 'passwords' || activeTab === 'cards' ? 'pb-[calc(5.75rem+env(safe-area-inset-bottom,0px))]' : 'pb-40'}`}>
           {activeTab === 'dashboard' && <Dashboard />}
           {activeTab === 'passwords' && <PasswordManager />}
           {activeTab === 'cards' && <CardManager />}
