@@ -2838,10 +2838,10 @@ const PasswordManager = () => {
       <div className="relative flex h-full min-h-0 flex-col p-2 sm:p-6 lg:p-8">
         {!selectedCategory && (
           <div className="flex w-full items-center justify-between gap-3 px-1 pt-1 sm:pt-2">
-            <h1 className="text-2xl font-black tracking-tight text-[var(--text)] sm:text-3xl">
+            <h1 className="min-w-0 truncate text-[22px] font-black tracking-tight text-[var(--text)] sm:text-3xl">
               {t('passwords')}
             </h1>
-            <div className="flex items-center gap-2">
+            <div className="flex shrink-0 items-center gap-2">
               <button
                 type="button"
                 onClick={openNewCategory}
@@ -2851,9 +2851,15 @@ const PasswordManager = () => {
               >
                 <FolderPlus size={18} />
               </button>
-              <Button onClick={() => handleOpenModal()} icon={Plus} className="rounded-xl px-4">
-                {t('addPassword')}
-              </Button>
+              <button
+                type="button"
+                onClick={() => handleOpenModal()}
+                className="inline-flex h-10 items-center justify-center gap-2 whitespace-nowrap rounded-xl bg-[var(--primary)] px-3 text-sm font-medium text-white shadow-md shadow-[var(--primary)]/20 transition-colors hover:bg-[var(--primary-hover)] sm:px-4"
+                aria-label={t('addPassword')}
+              >
+                <Plus size={18} />
+                <span className="hidden sm:inline">{t('addPassword')}</span>
+              </button>
             </div>
           </div>
         )}
@@ -2861,7 +2867,7 @@ const PasswordManager = () => {
         {!selectedCategory ? (
           <div className="mt-4 flex-1 min-h-0 overflow-y-auto overscroll-contain pb-24 sm:pb-10">
             <div className="w-full">
-              <div className="divide-y divide-white/8 border-y border-white/8 sm:rounded-none">
+              <div className="space-y-2.5">
                 {visibleCategories.map(cat => {
                   const tone = cat.name === 'Other' ? CATEGORY_NEUTRAL : createFolderColor(cat.order);
                   return (
@@ -2881,32 +2887,36 @@ const PasswordManager = () => {
                           setSelectedCategory(cat.name);
                         }
                       }}
-                      className="group flex w-full cursor-pointer items-center gap-1.5 px-0 py-2.5 pr-1 text-left transition-colors hover:bg-white/[0.03] focus-visible:bg-white/[0.03] focus-visible:outline-none sm:gap-3 sm:py-3 sm:pr-0"
+                      className={`group relative flex w-full cursor-pointer items-center gap-3.5 rounded-2xl border border-[color:color-mix(in_srgb,var(--border)_55%,transparent)] bg-[var(--surface)] px-3.5 py-3 text-left shadow-sm transition-all duration-200 hover:-translate-y-px hover:border-[var(--border)] hover:shadow-lg hover:shadow-black/20 focus-visible:border-[var(--primary)] focus-visible:outline-none sm:px-4 sm:py-3.5 ${folderMenu === cat.name ? 'z-20' : ''}`}
                     >
-                      <div className="flex min-w-0 flex-1 items-center gap-1.5 sm:gap-3">
-                        <span
-                          className="h-6 w-1 rounded-full shrink-0 sm:h-8 sm:w-1.5"
-                          style={{ background: `linear-gradient(180deg, ${tone.base}, ${tone.dark})` }}
-                        />
-                        <div className="min-w-0">
-                          <div className="flex min-w-0 items-center gap-2">
-                            <h3 className="truncate text-[18px] leading-[1.2] font-semibold tracking-wide text-white sm:text-[15px]">{cat.name}</h3>
-                            {isSystemCategory(cat.name) && (
-                              <span className="rounded-full border border-white/10 bg-black/15 px-1 py-0.5 text-[8px] font-semibold uppercase tracking-[0.14em] text-white/70">
-                                Sistema
-                              </span>
-                            )}
-                          </div>
+                      <span
+                        aria-hidden="true"
+                        className="pointer-events-none absolute inset-0 rounded-2xl opacity-70 transition-opacity duration-200 group-hover:opacity-100"
+                        style={{ background: `radial-gradient(120% 160% at 0% 0%, ${tone.glow}, transparent 60%)` }}
+                      />
+
+                      <div
+                        className="relative flex h-11 w-11 shrink-0 items-center justify-center rounded-xl ring-1 ring-inset ring-white/20 sm:h-12 sm:w-12"
+                        style={{ background: `linear-gradient(145deg, ${tone.base}, ${tone.dark})`, boxShadow: `0 8px 18px -8px ${tone.base}` }}
+                      >
+                        <Folder size={21} strokeWidth={1.75} className="text-white drop-shadow-sm" />
+                      </div>
+
+                      <div className="relative min-w-0 flex-1">
+                        <div className="flex min-w-0 items-center gap-2">
+                          <h3 className="truncate text-[17px] font-semibold leading-tight tracking-tight text-[var(--text)] sm:text-base">{cat.name}</h3>
+                          {isSystemCategory(cat.name) && (
+                            <span className="rounded-full border border-white/10 bg-white/5 px-1.5 py-0.5 text-[8px] font-semibold uppercase tracking-[0.14em] text-[var(--text-muted)]">
+                              Sistema
+                            </span>
+                          )}
                         </div>
+                        <p className={`mt-0.5 text-xs ${getCatCount(cat.name) === 0 ? 'text-[var(--text-muted)]/60' : 'text-[var(--text-muted)]'}`}>
+                          {getCatCount(cat.name)} {getCatCount(cat.name) === 1 ? ({ itens: 'item', items: 'item', elementos: 'elemento' }[t('items')] || t('items')) : t('items')}
+                        </p>
                       </div>
 
-                      <div className="flex shrink-0 items-center gap-2">
-                        <span className={`w-fit rounded-full border border-black/35 bg-black/40 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-[0.14em] backdrop-blur sm:px-2.5 sm:py-1 sm:text-[10px] ${getCatCount(cat.name) === 0 ? 'text-white/40' : 'text-white/90'}`}>
-                          {getCatCount(cat.name)} {t('items')}
-                        </span>
-                      </div>
-
-                      <div className="relative flex shrink-0 items-center" data-folder-actions="true">
+                      <div className={`relative flex shrink-0 items-center ${folderMenu === cat.name ? 'z-50' : 'z-10'}`} data-folder-actions="true">
                         {!isSystemCategory(cat.name) && (
                           <>
                             <button
@@ -2916,7 +2926,7 @@ const PasswordManager = () => {
                                 e.stopPropagation();
                                 setFolderMenu((current) => (current === cat.name ? null : cat.name));
                               }}
-                              className="rounded-full p-2 text-white/60 transition-colors hover:bg-white/10 hover:text-white"
+                              className="rounded-full p-2 text-[var(--text-muted)] transition-colors hover:bg-[var(--surface-hover)] hover:text-[var(--text)]"
                               aria-label={`Opções de ${cat.name}`}
                               aria-expanded={folderMenu === cat.name}
                             >
@@ -2946,6 +2956,8 @@ const PasswordManager = () => {
                           </>
                         )}
                       </div>
+
+                      <ChevronRight size={16} className="relative shrink-0 text-[var(--text-muted)] transition-transform duration-200 group-hover:translate-x-0.5 group-hover:text-[var(--text)]" />
                     </div>
                   );
                 })}
