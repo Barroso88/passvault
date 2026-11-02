@@ -8,7 +8,9 @@ import {
   Lock, Unlock, Shield, Key, CreditCard, LayoutDashboard, Settings, Plus,
   Search, Eye, EyeOff, Copy, Trash, Edit, Check, Star, AlertTriangle,
   LogOut, Clock, Globe, Menu, X, ChevronRight, ChevronDown, Hash, RefreshCw, Palette, Sparkles, Loader2,
-  Folder, FolderPlus, ArrowLeft, Upload, FileText, ArrowLeftRight, Ellipsis, ExternalLink
+  Folder, FolderPlus, ArrowLeft, Upload, FileText, ArrowLeftRight, Ellipsis, ExternalLink,
+  ShoppingCart, Landmark, Users, Tv, Music, Briefcase, Mail, Gamepad2, Plane, HeartPulse, GraduationCap,
+  House, Wifi, Car, Utensils, Camera, Cloud, Code, ShieldCheck, Smartphone, Newspaper, Gift, Building2, Dumbbell, Zap, Bitcoin
 } from 'lucide-react';
 
 // ==========================================
@@ -518,6 +520,43 @@ const getCategoryStyle = (category) => {
     backgroundImage: `linear-gradient(145deg, ${tone.base}, ${tone.dark})`,
     boxShadow: `0 16px 30px -20px rgba(0, 0, 0, 0.7), inset 0 1px 0 rgba(255,255,255,0.08), 0 0 0 1px rgba(255,255,255,0.03), 0 0 24px ${tone.glow}`,
   };
+};
+
+// Icon for a category, picked from keywords in its name (PT / EN / ES), falling back to a folder.
+const CATEGORY_ICON_RULES = [
+  [/shop|compra|loja|store|tienda|market|amazon/, ShoppingCart],
+  [/cripto|crypto|bitcoin|wallet|carteira/, Bitcoin],
+  [/financ|banc|bank|invest|dinheiro|money|dinero|imposto|tax|poupan|saving|segur[oa]s?\b/, Landmark],
+  [/cartao|cartoes|card|tarjeta/, CreditCard],
+  [/gov|estado|portal|public|autarqu|camara|tribunal/, Building2],
+  [/social|rede|facebook|instagram|twitter|tiktok|linkedin|amig|friends|familia|family/, Users],
+  [/stream|video|filme|movie|serie|tv\b|televis|netflix|cinema/, Tv],
+  [/music|musica|spotify|audio|podcast/, Music],
+  [/game|jogo|gaming|play|steam|xbox/, Gamepad2],
+  [/work|trabalho|emprego|job|office|escritorio|empresa|business|negocio|profission/, Briefcase],
+  [/mail|correio|inbox|outlook|gmail/, Mail],
+  [/viag|travel|ferias|vacation|hotel|voo|flight|booking|turismo/, Plane],
+  [/saude|health|medic|hospital|farmac|clinica|doctor|dentist/, HeartPulse],
+  [/edu|escola|school|uni|curso|course|estudo|study|formacao|learn/, GraduationCap],
+  [/casa|home|house|imobili|habita|rent|arrend/, House],
+  [/internet|wifi|router|network|telecom|operadora|isp\b|vpn/, Wifi],
+  [/carro|car\b|auto|veicul|vehicle|transporte|transport|uber|combust/, Car],
+  [/comida|food|restaur|delivery|cozinha|recipe|receita|cafe/, Utensils],
+  [/foto|photo|camera|imagem|image/, Camera],
+  [/cloud|nuvem|backup|storage|drive|hosting|dominio|domain/, Cloud],
+  [/dev|code|codigo|program|github|git\b|tech|server|servidor|api\b/, Code],
+  [/seguranca|security|privacy|privacidade|antivirus|2fa|auth/, ShieldCheck],
+  [/phone|telemovel|telefone|movil|mobile|app\b|apps\b/, Smartphone],
+  [/noticia|news|jornal|revista|magazine|blog/, Newspaper],
+  [/presente|gift|oferta|regalo|cupao|coupon|voucher/, Gift],
+  [/fitness|gym|ginasio|desporto|sport|treino|workout/, Dumbbell],
+  [/servic|utilit|energia|electric|luz\b|agua\b|gas\b|water|power/, Zap],
+];
+
+const getCategoryIcon = (name = '') => {
+  const normalized = String(name).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+  const rule = CATEGORY_ICON_RULES.find(([pattern]) => pattern.test(normalized));
+  return rule ? rule[1] : Folder;
 };
 
 const getCategoryName = (category) => (typeof category === 'string' ? category : category?.name || '');
@@ -2870,6 +2909,7 @@ const PasswordManager = () => {
               <div className="space-y-2.5">
                 {visibleCategories.map(cat => {
                   const tone = cat.name === 'Other' ? CATEGORY_NEUTRAL : createFolderColor(cat.order);
+                  const CategoryIcon = getCategoryIcon(cat.name);
                   return (
                     <div
                       key={cat.name}
@@ -2899,7 +2939,7 @@ const PasswordManager = () => {
                         className="relative flex h-11 w-11 shrink-0 items-center justify-center rounded-xl ring-1 ring-inset ring-white/20 sm:h-12 sm:w-12"
                         style={{ background: `linear-gradient(145deg, ${tone.base}, ${tone.dark})`, boxShadow: `0 8px 18px -8px ${tone.base}` }}
                       >
-                        <Folder size={21} strokeWidth={1.75} className="text-white drop-shadow-sm" />
+                        <CategoryIcon size={21} strokeWidth={1.75} className="text-white drop-shadow-sm" />
                       </div>
 
                       <div className="relative min-w-0 flex-1">
