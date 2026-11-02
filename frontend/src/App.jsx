@@ -2875,6 +2875,10 @@ const PasswordManager = () => {
     orderedCategories.filter((cat) => categoryMatchesSearch(cat.name))
   ), [orderedCategories, categoryMatchesSearch]);
 
+  const selectedCategoryMeta = selectedCategory ? orderedCategories.find((cat) => cat.name === selectedCategory) : null;
+  const selectedTone = !selectedCategoryMeta || selectedCategory === 'Other' ? CATEGORY_NEUTRAL : createFolderColor(selectedCategoryMeta.order);
+  const SelectedCategoryIcon = getCategoryIcon(selectedCategory || '');
+
   return (
     <div className="relative h-full min-h-0 overflow-hidden bg-transparent">
       <div className="relative flex h-full min-h-0 flex-col p-2 sm:p-6 lg:p-8">
@@ -3028,25 +3032,45 @@ const PasswordManager = () => {
               {t('passwords')}
             </button>
 
-            <div className="mb-4 flex items-end justify-between gap-3">
-              <div className="min-w-0">
-                <h2 className="truncate text-2xl font-black text-[var(--text)] sm:text-3xl">{selectedCategory}</h2>
-                <p className="mt-1 text-sm text-[var(--text-muted)]">
-                  {selectedCategoryCount} {t('items')}
+            <div
+              className="relative mb-4 flex items-center gap-3.5 rounded-2xl border bg-[var(--surface)] px-3.5 py-3 shadow-sm sm:px-4 sm:py-3.5"
+              style={{ borderColor: `color-mix(in srgb, ${selectedTone.base} 38%, transparent)` }}
+            >
+              <span
+                aria-hidden="true"
+                className="pointer-events-none absolute inset-0 rounded-2xl"
+                style={{ background: `linear-gradient(100deg, ${selectedTone.glow} 0%, transparent 75%)` }}
+              />
+              <div
+                className="relative flex h-11 w-11 shrink-0 items-center justify-center rounded-xl ring-1 ring-inset ring-white/20 sm:h-12 sm:w-12"
+                style={{ background: `linear-gradient(145deg, ${selectedTone.base}, ${selectedTone.dark})`, boxShadow: `0 8px 18px -8px ${selectedTone.base}` }}
+              >
+                <SelectedCategoryIcon size={21} strokeWidth={1.75} className="text-white drop-shadow-sm" />
+              </div>
+              <div className="relative min-w-0 flex-1">
+                <h2 className="truncate text-[17px] font-semibold leading-tight tracking-tight text-[var(--text)] sm:text-lg">{selectedCategory}</h2>
+                <p className="mt-0.5 text-xs text-[var(--text-muted)]">
+                  {selectedCategoryCount} {selectedCategoryCount === 1 ? ({ itens: 'item', items: 'item', elementos: 'elemento' }[t('items')] || t('items')) : t('items')}
                 </p>
               </div>
 
-              <div className="flex shrink-0 items-center gap-2">
+              <div className="relative flex shrink-0 items-center gap-2">
                 {selectedCategory === 'Other' && (
-                  <Button onClick={handleRemoveOtherDuplicates} variant="secondary" icon={Trash} className="rounded-xl px-3" title={t('removeOtherDuplicates')} aria-label={t('removeOtherDuplicates')} />
+                  <Button onClick={handleRemoveOtherDuplicates} variant="secondary" icon={Trash} className="h-10 rounded-xl px-3" title={t('removeOtherDuplicates')} aria-label={t('removeOtherDuplicates')} />
                 )}
-                <Button onClick={() => handleOpenModal()} icon={Plus} className="rounded-xl px-4">
-                  {t('addPassword')}
-                </Button>
+                <button
+                  type="button"
+                  onClick={() => handleOpenModal()}
+                  className="inline-flex h-10 items-center justify-center gap-2 whitespace-nowrap rounded-xl bg-[var(--primary)] px-3 text-sm font-medium text-white shadow-md shadow-[var(--primary)]/20 transition-colors hover:bg-[var(--primary-hover)] sm:px-4"
+                  aria-label={t('addPassword')}
+                >
+                  <Plus size={18} />
+                  <span className="hidden sm:inline">{t('addPassword')}</span>
+                </button>
               </div>
             </div>
 
-            <div className="rounded-2xl border border-[var(--border)] bg-[var(--bg)]/60 px-4 py-3 shadow-inner shadow-black/5">
+            <div className="rounded-2xl border border-[color:color-mix(in_srgb,var(--border)_55%,transparent)] bg-[var(--surface)] px-4 py-3 shadow-sm">
               <div className="flex items-center gap-3">
                 <Search size={18} className="text-[var(--text-muted)] shrink-0" />
                 <input
@@ -3070,16 +3094,22 @@ const PasswordManager = () => {
                   )}
                 </div>
               ) : (
-                <div className="divide-y divide-white/[0.06] border-y border-white/[0.06]">
+                <div className="space-y-2.5">
                   {filtered.map(item => (
                     <div
                       key={item.id}
-                      className="group flex items-center gap-1 px-0 py-1 transition-colors hover:bg-white/[0.04]"
+                      style={{ borderColor: `color-mix(in srgb, ${selectedTone.base} 30%, transparent)` }}
+                      className="group relative flex items-center gap-1 rounded-2xl border bg-[var(--surface)] px-3.5 py-1.5 shadow-sm transition-all duration-200 hover:-translate-y-px hover:shadow-lg hover:shadow-black/20 sm:px-4"
                     >
+                      <span
+                        aria-hidden="true"
+                        className="pointer-events-none absolute inset-0 rounded-2xl opacity-60 transition-opacity duration-200 group-hover:opacity-100"
+                        style={{ background: `linear-gradient(100deg, ${selectedTone.glow} 0%, transparent 60%)` }}
+                      />
                       <button
                         type="button"
                         onClick={() => setDetailItem(item)}
-                        className="flex min-w-0 flex-1 items-center gap-3 py-2 text-left"
+                        className="relative flex min-w-0 flex-1 items-center gap-3 py-2 text-left"
                       >
                         <EntryIcon key={getFavicon(item.url) || item.id} url={item.url} title={item.title} />
 
@@ -3096,7 +3126,7 @@ const PasswordManager = () => {
                         </div>
                       </button>
 
-                      <div className="flex shrink-0 items-center gap-1">
+                      <div className="relative flex shrink-0 items-center gap-1">
                         {item.url && (
                           <a
                             href={item.url.startsWith('http') ? item.url : `https://${item.url}`}
