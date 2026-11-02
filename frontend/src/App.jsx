@@ -871,7 +871,14 @@ const passwordSearchFields = (password) => [
   password?.notes,
   password?.category,
   password?.url,
+  ...(Array.isArray(password?.customFields) ? password.customFields.flatMap((field) => [field?.label, field?.secret ? '' : field?.value]) : []),
 ];
+
+// Custom fields: [{ id, label, value, secret }]. Rows left completely empty are dropped on save.
+const cleanCustomFields = (fields) => (Array.isArray(fields) ? fields : [])
+  .map((field) => ({ ...field, label: String(field?.label || '').trim(), value: String(field?.value || '') }))
+  .filter((field) => field.label || field.value)
+  .map((field) => ({ ...field, label: field.label || 'Campo' }));
 
 const cardSearchFields = (card) => [
   card?.name,
@@ -1757,6 +1764,88 @@ const Input = ({ label, type = 'text', icon: Icon, rightIcon, onRightIconClick, 
     </div>
   </div>
 );
+
+// Editor for user-defined fields (title + value) on a password entry.
+const CustomFieldsEditor = ({ fields, onChange }) => {
+  const list = Array.isArray(fields) ? fields : [];
+  const [revealed, setRevealed] = useState({});
+  const update = (id, patch) => onChange(list.map((field) => (field.id === id ? { ...field, ...patch } : field)));
+  const remove = (id) => onChange(list.filter((field) => field.id !== id));
+  const add = () => onChange([...list, { id: `cf-${Date.now()}-${Math.random().toString(16).slice(2, 6)}`, label: '', value: '', secret: false }]);
+  const inputClass = 'w-full rounded-xl border border-[var(--border)] bg-[var(--surface-hover)] px-3 py-2 text-sm text-[var(--text)] placeholder:text-[var(--text-muted)] focus:outline-none focus:ring-2 focus:ring-[var(--primary)]';
+
+  return (
+    <div className="mb-4">
+      <div className="mb-2 flex items-center justify-between">
+        <span className="text-sm font-medium text-[var(--text-muted)]">Campos personalizados</span>
+        <button
+          type="button"
+          onClick={add}
+          className="inline-flex items-center gap-1.5 rounded-lg border border-[var(--border)] px-2.5 py-1.5 text-xs font-medium text-[var(--text-muted)] transition-colors hover:border-[var(--primary)] hover:text-[var(--primary)]"
+        >
+          <Plus size={13} /> Adicionar campo
+        </button>
+      </div>
+
+      {list.length > 0 && (
+        <div className="space-y-2.5">
+          {list.map((field) => (
+            <div key={field.id} className="space-y-2 rounded-2xl border border-[var(--border)] bg-black/5 p-3">
+              <div className="flex items-center gap-2">
+                <input
+                  value={field.label}
+                  onChange={(e) => update(field.id, { label: e.target.value })}
+                  placeholder="Título do campo (ex.: PIN, Pergunta secreta)"
+                  className={inputClass}
+                  aria-label="Título do campo"
+                />
+                <button
+                  type="button"
+                  onClick={() => remove(field.id)}
+                  className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-[var(--text-muted)] transition-colors hover:bg-[var(--danger)]/10 hover:text-[var(--danger)]"
+                  title="Remover campo"
+                  aria-label="Remover campo"
+                >
+                  <Trash size={15} />
+                </button>
+              </div>
+              <div className="relative">
+                <input
+                  type={field.secret && !revealed[field.id] ? 'password' : 'text'}
+                  value={field.value}
+                  onChange={(e) => update(field.id, { value: e.target.value })}
+                  placeholder="Valor"
+                  autoComplete="off"
+                  className={`${inputClass} ${field.secret ? 'pr-10' : ''}`}
+                  aria-label="Valor do campo"
+                />
+                {field.secret && (
+                  <button
+                    type="button"
+                    onClick={() => setRevealed((current) => ({ ...current, [field.id]: !current[field.id] }))}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)] hover:text-[var(--text)]"
+                    aria-label={revealed[field.id] ? 'Esconder valor' : 'Mostrar valor'}
+                  >
+                    {revealed[field.id] ? <EyeOff size={16} /> : <Eye size={16} />}
+                  </button>
+                )}
+              </div>
+              <label className="flex cursor-pointer items-center gap-2 text-xs text-[var(--text-muted)]">
+                <input
+                  type="checkbox"
+                  checked={!!field.secret}
+                  onChange={(e) => update(field.id, { secret: e.target.checked })}
+                  className="h-3.5 w-3.5 accent-[var(--primary)]"
+                />
+                Ocultar valor (como uma password)
+              </label>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+};
 
 // Button Component
 const Button = ({ children, variant = 'primary', icon: Icon, className = '', disabled, ...props }) => {
@@ -2716,9 +2805,9 @@ const PasswordManager = () => {
   const handleSave = (e) => {
     e.preventDefault();
     if (editingItem) {
-      setPasswords(prev => prev.map(p => p.id === editingItem.id ? { ...form, id: p.id, date: Date.now() } : p));
+      setPasswords(prev => prev.map(p => p.id === editingItem.id ? { ...form, customFields: cleanCustomFields(form.customFields), id: p.id, date: Date.now() } : p));
     } else {
-      setPasswords(prev => [{ ...form, id: Date.now().toString(), date: Date.now() }, ...prev]);
+      setPasswords(prev => [{ ...form, customFields: cleanCustomFields(form.customFields), id: Date.now().toString(), date: Date.now() }, ...prev]);
     }
     setIsModalOpen(false);
   };
@@ -3230,6 +3319,37 @@ const PasswordManager = () => {
                   </div>
                 )}
 
+                {Array.isArray(detailItem.customFields) && detailItem.customFields.map((field, index) => (
+                  <div key={field.id || `${field.label}-${index}`} className="rounded-2xl border border-white/8 bg-black/10 px-3 py-3">
+                    <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-[var(--text-muted)]">{field.label}</p>
+                    <div className="mt-1 flex items-center gap-2">
+                      {field.secret ? (
+                        <SecretText
+                          text={field.value}
+                          containerClassName="min-w-0 flex-1"
+                          textClassName="truncate text-sm font-semibold"
+                          toggleClassName="rounded-full border border-white/8 bg-white/5 p-1.5"
+                          copyClassName="rounded-full border border-white/8 bg-white/5 p-1.5"
+                        />
+                      ) : (
+                        <>
+                          <p className="min-w-0 flex-1 break-words text-sm text-[var(--text)]">{field.value || '—'}</p>
+                          {field.value && (
+                            <button
+                              type="button"
+                              onClick={() => copyToClipboard(field.value)}
+                              className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-white/8 bg-white/5 px-3 py-1.5 text-xs font-medium text-[var(--text-muted)] transition-colors hover:border-[var(--primary)] hover:text-[var(--primary)]"
+                              title={`Copiar ${field.label}`}
+                            >
+                              <Copy size={13} /> Copiar
+                            </button>
+                          )}
+                        </>
+                      )}
+                    </div>
+                  </div>
+                ))}
+
                 {detailItem.date && (
                   <p className="px-1 text-xs text-[var(--text-muted)]">
                     Última alteração: {new Date(detailItem.date).toLocaleDateString('pt-PT', { day: '2-digit', month: 'short', year: 'numeric' })}
@@ -3327,6 +3447,8 @@ const PasswordManager = () => {
             </div>
 
             <Input label={t('notes')} value={form.notes} onChange={e => setForm({ ...form, notes: e.target.value })} placeholder="Opcional" />
+
+            <CustomFieldsEditor fields={form.customFields} onChange={(customFields) => setForm({ ...form, customFields })} />
 
             <div className="flex space-x-3 pt-4">
               {editingItem && <Button type="button" variant="danger" icon={Trash} onClick={() => handleDelete(editingItem.id)} className="px-3" />}
@@ -3564,7 +3686,7 @@ const GlobalQuickCreateModals = () => {
 
   const handleSavePassword = (e) => {
     e.preventDefault();
-    setPasswords(prev => [{ ...passwordForm, id: Date.now().toString(), date: Date.now() }, ...prev]);
+    setPasswords(prev => [{ ...passwordForm, customFields: cleanCustomFields(passwordForm.customFields), id: Date.now().toString(), date: Date.now() }, ...prev]);
     setQuickCreate(null);
   };
 
@@ -3637,6 +3759,7 @@ const GlobalQuickCreateModals = () => {
           <Input label={t('username')} value={passwordForm.username} onChange={e => setPasswordForm({ ...passwordForm, username: e.target.value })} />
           <Input label={t('password')} type="password" value={passwordForm.password} onChange={e => setPasswordForm({ ...passwordForm, password: e.target.value })} required />
           <Input label={t('notes')} value={passwordForm.notes} onChange={e => setPasswordForm({ ...passwordForm, notes: e.target.value })} />
+          <CustomFieldsEditor fields={passwordForm.customFields} onChange={(customFields) => setPasswordForm({ ...passwordForm, customFields })} />
           <div>
             <label className="text-sm font-medium text-[var(--text-muted)] mb-2 block">{t('category')}</label>
             <select value={passwordForm.category} onChange={e => setPasswordForm({ ...passwordForm, category: e.target.value })} className="w-full bg-transparent text-sm text-[var(--text)] border border-[var(--border)] rounded-lg p-2 outline-none">
@@ -3734,7 +3857,7 @@ const GlobalQuickEditModals = () => {
 
   const handleSavePassword = (e) => {
     e.preventDefault();
-    setPasswords(prev => prev.map(p => p.id === passwordForm.id ? { ...passwordForm, date: Date.now() } : p));
+    setPasswords(prev => prev.map(p => p.id === passwordForm.id ? { ...passwordForm, customFields: cleanCustomFields(passwordForm.customFields), date: Date.now() } : p));
     setQuickEdit(null);
   };
 
@@ -3762,6 +3885,7 @@ const GlobalQuickEditModals = () => {
             <Input label={t('username')} value={passwordForm.username} onChange={e => setPasswordForm({ ...passwordForm, username: e.target.value })} />
             <Input label={t('password')} type="password" value={passwordForm.password} onChange={e => setPasswordForm({ ...passwordForm, password: e.target.value })} required />
             <Input label={t('notes')} value={passwordForm.notes} onChange={e => setPasswordForm({ ...passwordForm, notes: e.target.value })} />
+          <CustomFieldsEditor fields={passwordForm.customFields} onChange={(customFields) => setPasswordForm({ ...passwordForm, customFields })} />
             <div>
               <label className="text-sm font-medium text-[var(--text-muted)] mb-2 block">{t('category')}</label>
               <select value={passwordForm.category} onChange={e => setPasswordForm({ ...passwordForm, category: e.target.value })} className="w-full bg-transparent text-sm text-[var(--text)] border border-[var(--border)] rounded-lg p-2 outline-none">
