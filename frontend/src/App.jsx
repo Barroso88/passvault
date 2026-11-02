@@ -487,6 +487,15 @@ const createFolderColor = (order = 0) => {
   };
 };
 
+// Frosted-glass surface tinted with a category colour. Follows the theme through CSS variables.
+const glassStyle = (tone, strength = 1) => ({
+  background: `linear-gradient(135deg, ${tone.glow} 0%, color-mix(in srgb, var(--surface) ${Math.round(46 * strength)}%, transparent) 78%)`,
+  border: `1px solid color-mix(in srgb, ${tone.base} 28%, color-mix(in srgb, var(--text) 16%, transparent))`,
+  boxShadow: 'inset 0 1px 0 color-mix(in srgb, var(--text) 18%, transparent), inset 0 -1px 0 color-mix(in srgb, var(--text) 5%, transparent), 0 10px 30px -14px rgba(0, 0, 0, 0.55)',
+  backdropFilter: 'blur(18px) saturate(165%)',
+  WebkitBackdropFilter: 'blur(18px) saturate(165%)',
+});
+
 const normalizeCategories = (input = []) => {
   const items = Array.isArray(input) ? input : [];
   const normalized = items.map((cat, index) => {
@@ -2662,6 +2671,15 @@ const PasswordManager = () => {
   const [editingCategory, setEditingCategory] = useState(null);
   const [folderMenu, setFolderMenu] = useState(null);
 
+  useEffect(() => {
+    if (!folderMenu) return undefined;
+    const closeOnOutside = (event) => {
+      if (!event.target.closest('[data-folder-actions="true"]')) setFolderMenu(null);
+    };
+    document.addEventListener('pointerdown', closeOnOutside);
+    return () => document.removeEventListener('pointerdown', closeOnOutside);
+  }, [folderMenu]);
+
   const [form, setForm] = useState({ title: '', url: '', username: '', password: '', notes: '', category: 'Other', favorite: false });
   const [showPwdInForm, setShowPwdInForm] = useState(false);
   const [isGeneratingInfo, setIsGeneratingInfo] = useState(false);
@@ -2967,9 +2985,31 @@ const PasswordManager = () => {
   const selectedCategoryMeta = selectedCategory ? orderedCategories.find((cat) => cat.name === selectedCategory) : null;
   const selectedTone = !selectedCategoryMeta || selectedCategory === 'Other' ? CATEGORY_NEUTRAL : createFolderColor(selectedCategoryMeta.order);
   const SelectedCategoryIcon = getCategoryIcon(selectedCategory || '');
+  const ambientTones = selectedCategory
+    ? [selectedTone, selectedTone, selectedTone]
+    : visibleCategories.slice(0, 4).map((cat) => (cat.name === 'Other' ? CATEGORY_NEUTRAL : createFolderColor(cat.order)));
+  const AMBIENT_SPOTS = [
+    { top: '-8%', left: '-14%' },
+    { top: '34%', right: '-18%' },
+    { bottom: '-10%', left: '12%' },
+    { top: '8%', right: '8%' },
+  ];
 
   return (
     <div className="relative h-full min-h-0 overflow-hidden bg-transparent">
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-0 overflow-hidden"
+        style={{ maskImage: 'radial-gradient(ellipse 75% 70% at 50% 45%, black 35%, transparent 100%)', WebkitMaskImage: 'radial-gradient(ellipse 75% 70% at 50% 45%, black 35%, transparent 100%)' }}
+      >
+        {ambientTones.map((tone, index) => (
+          <span
+            key={index}
+            className="absolute h-72 w-72 rounded-full blur-3xl sm:h-96 sm:w-96"
+            style={{ ...AMBIENT_SPOTS[index % AMBIENT_SPOTS.length], background: tone.base, opacity: 0.3 }}
+          />
+        ))}
+      </div>
       <div className="relative flex h-full min-h-0 flex-col p-2 sm:p-6 lg:p-8">
         {!selectedCategory && (
           <div className="flex w-full items-center justify-between gap-3 px-1 pt-1 sm:pt-2">
@@ -3023,15 +3063,9 @@ const PasswordManager = () => {
                           setSelectedCategory(cat.name);
                         }
                       }}
-                      style={{ borderColor: `color-mix(in srgb, ${tone.base} 38%, transparent)` }}
-                      className={`group relative flex w-full cursor-pointer items-center gap-3.5 rounded-2xl border bg-[var(--surface)] px-3.5 py-3 text-left shadow-sm transition-all duration-200 hover:-translate-y-px hover:shadow-lg hover:shadow-black/20 focus-visible:border-[var(--primary)] focus-visible:outline-none sm:px-4 sm:py-3.5 ${folderMenu === cat.name ? 'z-20' : ''}`}
+                      style={glassStyle(tone)}
+                      className={`group relative flex w-full cursor-pointer items-center gap-3.5 rounded-2xl px-3.5 py-3 text-left transition-all duration-200 hover:-translate-y-px focus-visible:border-[var(--primary)] focus-visible:outline-none sm:px-4 sm:py-3.5 ${folderMenu === cat.name ? 'z-20' : ''}`}
                     >
-                      <span
-                        aria-hidden="true"
-                        className="pointer-events-none absolute inset-0 rounded-2xl opacity-70 transition-opacity duration-200 group-hover:opacity-100"
-                        style={{ background: `linear-gradient(100deg, ${tone.glow} 0%, transparent 75%)` }}
-                      />
-
                       <div
                         className="relative flex h-11 w-11 shrink-0 items-center justify-center rounded-xl ring-1 ring-inset ring-white/20 sm:h-12 sm:w-12"
                         style={{ background: `linear-gradient(145deg, ${tone.base}, ${tone.dark})`, boxShadow: `0 8px 18px -8px ${tone.base}` }}
@@ -3071,7 +3105,6 @@ const PasswordManager = () => {
                             </button>
                             {folderMenu === cat.name && (
                               <>
-                                <div className="fixed inset-0 z-30" onClick={(e) => { e.stopPropagation(); setFolderMenu(null); }} />
                                 <div className="absolute right-0 top-full z-40 mt-1 w-40 overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--surface)] py-1 shadow-xl shadow-black/40">
                                   <button
                                     type="button"
@@ -3122,14 +3155,9 @@ const PasswordManager = () => {
             </button>
 
             <div
-              className="relative mb-4 flex items-center gap-3.5 rounded-2xl border bg-[var(--surface)] px-3.5 py-3 shadow-sm sm:px-4 sm:py-3.5"
-              style={{ borderColor: `color-mix(in srgb, ${selectedTone.base} 38%, transparent)` }}
+              className="relative mb-4 flex items-center gap-3.5 rounded-2xl px-3.5 py-3 sm:px-4 sm:py-3.5"
+              style={glassStyle(selectedTone)}
             >
-              <span
-                aria-hidden="true"
-                className="pointer-events-none absolute inset-0 rounded-2xl"
-                style={{ background: `linear-gradient(100deg, ${selectedTone.glow} 0%, transparent 75%)` }}
-              />
               <div
                 className="relative flex h-11 w-11 shrink-0 items-center justify-center rounded-xl ring-1 ring-inset ring-white/20 sm:h-12 sm:w-12"
                 style={{ background: `linear-gradient(145deg, ${selectedTone.base}, ${selectedTone.dark})`, boxShadow: `0 8px 18px -8px ${selectedTone.base}` }}
@@ -3159,7 +3187,7 @@ const PasswordManager = () => {
               </div>
             </div>
 
-            <div className="rounded-2xl border border-[color:color-mix(in_srgb,var(--border)_55%,transparent)] bg-[var(--surface)] px-4 py-3 shadow-sm">
+            <div className="rounded-2xl px-4 py-3" style={glassStyle(CATEGORY_NEUTRAL, 0.7)}>
               <div className="flex items-center gap-3">
                 <Search size={18} className="text-[var(--text-muted)] shrink-0" />
                 <input
@@ -3187,14 +3215,9 @@ const PasswordManager = () => {
                   {filtered.map(item => (
                     <div
                       key={item.id}
-                      style={{ borderColor: `color-mix(in srgb, ${selectedTone.base} 30%, transparent)` }}
-                      className="group relative flex items-center gap-1 rounded-2xl border bg-[var(--surface)] px-3.5 py-1.5 shadow-sm transition-all duration-200 hover:-translate-y-px hover:shadow-lg hover:shadow-black/20 sm:px-4"
+                      style={glassStyle(selectedTone, 0.8)}
+                      className="group relative flex items-center gap-1 rounded-2xl px-3.5 py-1.5 transition-all duration-200 hover:-translate-y-px sm:px-4"
                     >
-                      <span
-                        aria-hidden="true"
-                        className="pointer-events-none absolute inset-0 rounded-2xl opacity-60 transition-opacity duration-200 group-hover:opacity-100"
-                        style={{ background: `linear-gradient(100deg, ${selectedTone.glow} 0%, transparent 60%)` }}
-                      />
                       <button
                         type="button"
                         onClick={() => setDetailItem(item)}
