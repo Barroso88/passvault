@@ -471,16 +471,19 @@ const CATEGORY_NEUTRAL = {
   glow: 'hsla(215 16% 65% / 0.18)',
 };
 
+// Hand-picked hues, ordered so neighbouring categories are always clearly different.
+const FOLDER_HUES = [215, 25, 145, 275, 350, 175, 45, 305, 195, 95, 245, 10];
+
 const createFolderColor = (order = 0) => {
-  const seed = Number.isFinite(Number(order)) ? Number(order) : 0;
-  const hue = (seed * 137.508) % 360;
-  const saturation = 84 - ((seed % 4) * 6);
-  const lightness = 55 - ((seed % 3) * 2);
-  const darkLightness = Math.max(20, lightness - 24);
+  const seed = Number.isFinite(Number(order)) ? Math.max(0, Math.round(Number(order))) : 0;
+  const hue = FOLDER_HUES[seed % FOLDER_HUES.length];
+  const lap = Math.floor(seed / FOLDER_HUES.length);
+  const saturation = 78;
+  const lightness = Math.max(40, 54 - lap * 5);
   return {
     base: `hsl(${hue} ${saturation}% ${lightness}%)`,
-    dark: `hsl(${hue} ${saturation}% ${darkLightness}%)`,
-    glow: `hsla(${hue} ${saturation}% 66% / 0.24)`,
+    dark: `hsl(${hue} ${saturation}% ${Math.max(20, lightness - 24)}%)`,
+    glow: `hsla(${hue} ${saturation}% 58% / 0.30)`,
   };
 };
 
@@ -2927,12 +2930,13 @@ const PasswordManager = () => {
                           setSelectedCategory(cat.name);
                         }
                       }}
-                      className={`group relative flex w-full cursor-pointer items-center gap-3.5 rounded-2xl border border-[color:color-mix(in_srgb,var(--border)_55%,transparent)] bg-[var(--surface)] px-3.5 py-3 text-left shadow-sm transition-all duration-200 hover:-translate-y-px hover:border-[var(--border)] hover:shadow-lg hover:shadow-black/20 focus-visible:border-[var(--primary)] focus-visible:outline-none sm:px-4 sm:py-3.5 ${folderMenu === cat.name ? 'z-20' : ''}`}
+                      style={{ borderColor: `color-mix(in srgb, ${tone.base} 38%, transparent)` }}
+                      className={`group relative flex w-full cursor-pointer items-center gap-3.5 rounded-2xl border bg-[var(--surface)] px-3.5 py-3 text-left shadow-sm transition-all duration-200 hover:-translate-y-px hover:shadow-lg hover:shadow-black/20 focus-visible:border-[var(--primary)] focus-visible:outline-none sm:px-4 sm:py-3.5 ${folderMenu === cat.name ? 'z-20' : ''}`}
                     >
                       <span
                         aria-hidden="true"
                         className="pointer-events-none absolute inset-0 rounded-2xl opacity-70 transition-opacity duration-200 group-hover:opacity-100"
-                        style={{ background: `radial-gradient(120% 160% at 0% 0%, ${tone.glow}, transparent 60%)` }}
+                        style={{ background: `linear-gradient(100deg, ${tone.glow} 0%, transparent 75%)` }}
                       />
 
                       <div
